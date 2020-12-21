@@ -10,7 +10,7 @@
   "config": {
     "fund": false
   },
-  "devDependencies": {
+  "peerDependencies": {
     "eslint": "^7.16.0"
   }
 }
