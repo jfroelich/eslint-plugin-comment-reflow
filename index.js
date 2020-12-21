@@ -57,7 +57,7 @@ function analyzeProgram(context, node) {
     for (let line = comment.loc.start.line; line <= comment.loc.end.line; line++) {
       if (comment.type === 'Block') {
         const text = code.lines[line - 1];
-        if (text.trimLeft().startsWith('* ```')) {
+        if (text.trimStart().startsWith('* ```')) {
           fenced = !fenced;
         }
       }
@@ -114,7 +114,7 @@ function createLineCommentLineOverflowReport(node, code, comment, line, maxLineL
 
   // if there is a comment directive then never overflow
 
-  const content = text.trimLeft().slice(2).trimLeft();
+  const content = text.trimStart().slice(2).trimStart();
   if (content.startsWith('eslint-')) {
     return;
   }
@@ -181,7 +181,7 @@ function createBlockCommentLineOverflowReport(node, code, comment, line, maxLine
     return;
   }
 
-  text = text.trimLeft();
+  text = text.trimStart();
 
   // Do not treat tslint directives as overflowing
 
@@ -486,7 +486,7 @@ function createLineCommentLineUnderflowReport(node, code, comment, commentIndex,
   // If the current single line comment is an eslint pragma kind of comment then never consider it 
   // to underflow.
 
-  const content = trimmedText.slice(2).trimLeft();
+  const content = trimmedText.slice(2).trimStart();
 
   if (content.startsWith('eslint-')) {
     return;
@@ -556,7 +556,7 @@ function createLineCommentLineUnderflowReport(node, code, comment, commentIndex,
     return;
   }
   
-  const nextContentLeftTrimmed = nextContent.trimLeft();
+  const nextContentLeftTrimmed = nextContent.trimStart();
 
   // For the current line to underflow, the next line has to have some content other than comment 
   // syntax and also other than just whitespace.
