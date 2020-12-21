@@ -46,10 +46,9 @@ function analyzeProgram(context, node) {
 
   const code = context.getSourceCode();
   const comments = code.getAllComments();
-  const commentCount = comments.length;
   let lineRangeStart = 0;
 
-  for (let index = 0; index < commentCount; index++) {
+  for (let index = 0; index < comments.length; index++) {
     const comment = comments[index];
     lineRangeStart = comment.range[0];
     let fenced = false;
