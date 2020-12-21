@@ -7,6 +7,9 @@
     "name": "Josh Froelich",
     "email": "joshua.froelich@gmail.com"
   },
+  "config": {
+    "fund": false
+  },
   "devDependencies": {
     "eslint": "^7.16.0"
   }
