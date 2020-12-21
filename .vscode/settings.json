@@ -1,0 +1,49 @@
+{
+  "javascript.validate.enable": false,
+  "javascript.format.enable": false,
+  "javascript.format.semicolons": "insert",
+  "javascript.preferences.quoteStyle": "single",
+  "javascript.updateImportsOnFileMove.enabled": "always",
+  "javascript.suggest.completeFunctionCalls": true,
+  "typescript.suggest.completeFunctionCalls": true,
+  "typescript.preferences.quoteStyle": "single",
+  "typescript.format.enable": false,
+  "typescript.validate.enable": true,
+  "typescript.preferences.importModuleSpecifier": "relative",
+  "typescript.updateImportsOnFileMove.enabled": "always",
+  "typescript.tsdk": "./node_modules/typescript/lib",
+  "typescript.surveys.enabled": false,
+  "typescript.format.semicolons": "insert",
+  "[typescript]": {
+    "editor.defaultFormatter": "dbaeumer.vscode-eslint"
+  },
+  "eslint.format.enable": true,
+  "eslint.lintTask.enable": true,
+  "eslint.codeActionsOnSave.mode": "all",
+  "eslint.onIgnoredFiles": "off",
+  "npm.autoDetect": "on",
+  "git.inputValidationLength": 1000,
+  "git.inputValidationSubjectLength": 100,
+  "editor.tabSize": 2,
+  "editor.detectIndentation": false,
+  "editor.formatOnSave": true,
+  "editor.codeActionsOnSave": {
+    "source.organizeImports": true,
+    "source.fixAll": true
+  },
+  "files.watcherExclude": {
+    ".git": true,
+    "node_modules": true,
+  },
+  "files.exclude": {
+    ".git": true,
+    ".gitignore": true,
+    // ".npmignore": true,
+    // ".eslintignore": true,
+    // "dist": true,
+    // "node_modules": true,
+    // "tsconfig.json": true,
+    // "package-lock.json": true,
+    // "readme.md": true
+  }
+}
