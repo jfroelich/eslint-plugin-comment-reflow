@@ -7,6 +7,13 @@
     "name": "Josh Froelich",
     "email": "joshua.froelich@gmail.com"
   },
+  "keywords": [
+    "eslint",
+    "eslintplugin",
+    "comments",
+    "javascript",
+    "typescript"
+  ],
   "config": {
     "fund": false
   },
