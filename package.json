@@ -1,0 +1,13 @@
+{
+  "name": "eslint-plugin-reflow",
+  "version": "1.0.0",
+  "main": "index.js",
+  "license": "MIT",
+  "author": {
+    "name": "Josh Froelich",
+    "email": "joshua.froelich@gmail.com"
+  },
+  "devDependencies": {
+    "eslint": "^7.16.0"
+  }
+}
