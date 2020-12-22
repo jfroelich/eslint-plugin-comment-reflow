@@ -1,34 +1,32 @@
 import assert from 'assert';
 import eslint from 'eslint';
-import estree from 'estree';
+import { CommentContext } from './comment-context';
 
-export function createLineCommentLineUnderflowReport(node: estree.Node, code: eslint.SourceCode, 
-  comment: estree.Comment, commentIndex: number, line: number, maxLineLength: number, 
-  lineRangeStart: number) {
-  if (comment.type !== 'Line') {
+export function createLineCommentLineUnderflowReport(context: CommentContext) {
+  if (context.comment.type !== 'Line') {
     return;
   }
 
   // Get the text of the line. Do not confuse this with comment value. line is 1 based so we 
   // subtract 1 to get the line in the lines array.
 
-  const text = code.lines[line - 1];
+  const text = context.code.lines[context.line - 1];
 
   // The comment line only underflows when it is less than the maximum line length.
 
-  if (text.length >= maxLineLength) {
+  if (text.length >= context.max_line_length) {
     return;
   }
 
   // We must consider that eslint stripped out the line break from the text. Therefore, if we count 
   // the line break character itself, and we are right at the threshold, this is not underflow.
-  if (text.length + 1 === maxLineLength) {
+  if (text.length + 1 === context.max_line_length) {
     return;
   }
 
   // For a single line comment line to underflow, it cannot be the final comment in the file.
-  const comments = code.getAllComments();
-  if (commentIndex + 1 === comments.length) {
+  const comments = context.code.getAllComments();
+  if (context.comment_index + 1 === comments.length) {
     return;
   }
 
@@ -65,7 +63,7 @@ export function createLineCommentLineUnderflowReport(node: estree.Node, code: es
 
   // We know this comment is not the final comment. Examine the next comment.
 
-  const next = comments[commentIndex + 1];
+  const next = comments[context.comment_index + 1];
 
   // For a single line comment line to underflow, there must be a subsequent single line comment
   // line. The comments array contains block and single line comments mixed together. If the next
@@ -82,13 +80,13 @@ export function createLineCommentLineUnderflowReport(node: estree.Node, code: es
   // considered adjacent if the difference between the current line number and the next comment's 
   // line number is 1. We could use comment.loc.end.line or line here.
 
-  if (next.loc.start.line - line !== 1) {
+  if (next.loc.start.line - context.line !== 1) {
     return;
   }
 
   // Get the text of the next comment line. Line is offset-1, so we just get the text at line.
 
-  const nextCommentLineText = code.lines[line];
+  const nextCommentLineText = context.code.lines[context.line];
 
   // Find where the comment starts. We cannot assume the comment is at the start of the line as it 
   // could be a trailing comment. We search from the left because we want the first set of slashes, 
@@ -175,7 +173,7 @@ export function createLineCommentLineUnderflowReport(node: estree.Node, code: es
   // line. If the sum of the two is greater than the total preferred text length per line, then we
   // treat the current line as not underflowing.
 
-  if (edge === -1 && nextContent.length + text.length > maxLineLength) {
+  if (edge === -1 && nextContent.length + text.length > context.max_line_length) {
     console.debug('no space found in next line, next line does not fit');
     return;
   }
@@ -184,7 +182,7 @@ export function createLineCommentLineUnderflowReport(node: estree.Node, code: es
   // to the current line text. If shifting the characters would cause the current line to overflow,
   // then the current line is not considered underflow.
 
-  if (edge !== -1 && edge + text.length > maxLineLength) {
+  if (edge !== -1 && edge + text.length > context.max_line_length) {
     console.debug('space found in next line but does not fit current line "%s"', text,
       edge + text.length);
     return;
@@ -193,19 +191,19 @@ export function createLineCommentLineUnderflowReport(node: estree.Node, code: es
   console.debug('determined edge and that it fits', edge, text.length, edge + text.length);
 
   const report: eslint.Rule.ReportDescriptor = {
-    node,
-    loc: comment.loc,
+    node: context.node,
+    loc: context.comment.loc,
     messageId: 'underflow',
     data: {
       line_length: `${text.length}`,
-      max_length: `${maxLineLength}`
+      max_length: `${context.max_line_length}`
     },
     fix: function (fixer) {
       const adjustment = edge === -1 ? 2 : 3;
       return fixer.replaceTextRange([
-        lineRangeStart + code.lines[line - 1].length,
-        lineRangeStart + code.lines[line - 1].length + 1 + code.lines[line].indexOf('//') + 
-          adjustment
+        context.line_range_start + context.code.lines[context.line - 1].length,
+        context.line_range_start + context.code.lines[context.line - 1].length + 1 + 
+          context.code.lines[context.line].indexOf('//') + adjustment
       ], ' ');
     }
   };

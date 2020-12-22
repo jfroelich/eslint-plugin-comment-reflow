@@ -3,6 +3,7 @@ import eslint from 'eslint';
 import estree from 'estree';
 import { createBlockCommentLineOverflowReport } from './block-overflow';
 import { createBlockCommentLineUnderflowReport } from './block-underflow';
+import { CommentContext } from './comment-context';
 import { createLineCommentLineOverflowReport } from './line-overflow';
 import { createLineCommentLineUnderflowReport } from './line-underflow';
 
@@ -62,27 +63,38 @@ function analyzeProgram(context: eslint.Rule.RuleContext, node: estree.Node) {
         }
       }
 
+      // TODO: we want to reuse this per line of the comment instead of creating from scratch for 
+      // each line in the case of a block comment. simultaneously we want to stop calculating the 
+      // fence state here and move the calculation to within the helper.
+
+      const commentContext: CommentContext = {
+        node,
+        code,
+        comment,
+        line,
+        max_line_length: maxLineLength,
+        fenced,
+        line_range_start: lineRangeStart,
+        comment_index: index
+      };
+
       let report = null;
-      report = createBlockCommentLineOverflowReport(node, code, comment, line, maxLineLength, 
-        fenced, lineRangeStart);
+      report = createBlockCommentLineOverflowReport(commentContext);
       if (report) {
         return context.report(report);
       }
 
-      report = createLineCommentLineOverflowReport(node, code, comment, line, maxLineLength,
-        lineRangeStart);
+      report = createLineCommentLineOverflowReport(commentContext);
       if (report) {
         return context.report(report);
       }
 
-      report = createBlockCommentLineUnderflowReport(node, code, comment, line, maxLineLength, 
-        fenced, lineRangeStart);
+      report = createBlockCommentLineUnderflowReport(commentContext);
       if (report) {
         return context.report(report);
       }
 
-      report = createLineCommentLineUnderflowReport(node, code, comment, index, line, maxLineLength, 
-        lineRangeStart);
+      report = createLineCommentLineUnderflowReport(commentContext);
       if (report) {
         return context.report(report);
       }

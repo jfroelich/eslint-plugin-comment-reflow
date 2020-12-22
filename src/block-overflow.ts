@@ -1,19 +1,17 @@
 import eslint from 'eslint';
-import estree from 'estree';
+import { CommentContext } from './comment-context';
 
-export function createBlockCommentLineOverflowReport(node: estree.Node, code: eslint.SourceCode, 
-  comment: estree.Comment, line: number, maxLineLength: number, fenced: boolean,
-  lineRangeStart: number) {
-  if (comment.type !== 'Block') {
+export function createBlockCommentLineOverflowReport(context: CommentContext) {
+  if (context.comment.type !== 'Block') {
     return;
   }
 
-  if (fenced) {
+  if (context.fenced) {
     return;
   }
 
-  let text = code.lines[line - 1];
-  if (text.length <= maxLineLength) {
+  let text = context.code.lines[context.line - 1];
+  if (text.length <= context.max_line_length) {
     return;
   }
 
@@ -21,7 +19,7 @@ export function createBlockCommentLineOverflowReport(node: estree.Node, code: es
 
   // Do not treat tslint directives as overflowing
 
-  if (line === comment.loc.start.line && text.startsWith('/* tslint:')) {
+  if (context.line === context.comment.loc.start.line && text.startsWith('/* tslint:')) {
     return;
   }
 
@@ -30,37 +28,38 @@ export function createBlockCommentLineOverflowReport(node: estree.Node, code: es
 
   let edge = -1;
   if (text.startsWith('* ')) {
-    edge = text.slice(2).lastIndexOf(' ', maxLineLength - 2);
+    edge = text.slice(2).lastIndexOf(' ', context.max_line_length - 2);
 
     // the slice wreaks some havoc on the offset
-    if (edge + 3 > maxLineLength) {
-      edge = maxLineLength;
+    if (edge + 3 > context.max_line_length) {
+      edge = context.max_line_length;
     } else if (edge !== -1) {
       edge = edge + 3;
     }
   } else {
     // we trimmed left. we are starting with * or whatever is first text.
-    edge = text.lastIndexOf(' ', maxLineLength);
+    edge = text.lastIndexOf(' ', context.max_line_length);
   }
 
   const report: eslint.Rule.ReportDescriptor = {
-    node,
-    loc: comment.loc,
+    node: context.node,
+    loc: context.comment.loc,
     messageId: 'overflow',
     data: {
       line_length: `${text.length}`,
-      max_length: `${maxLineLength}`
+      max_length: `${context.max_line_length}`
     },
     fix: function (fixer) {
-      const text = code.lines[line - 1];
+      const text = context.code.lines[context.line - 1];
       if (edge === -1) {
-        const firstOverflowingCharacter = text.charAt(maxLineLength);
+        const firstOverflowingCharacter = text.charAt(context.max_line_length);
         const insertedText = firstOverflowingCharacter === ' ' ? '\n*' : '\n* ';
-        return fixer.insertTextAfterRange([0, lineRangeStart + maxLineLength], insertedText);
+        return fixer.insertTextAfterRange([0, context.line_range_start + context.max_line_length], 
+          insertedText);
       } else {
         const firstOverflowingCharacter = text.charAt(edge);
         const insertedText = firstOverflowingCharacter === ' ' ? '\n*' : '\n* ';
-        return fixer.insertTextAfterRange([0, lineRangeStart + edge], insertedText);
+        return fixer.insertTextAfterRange([0, context.line_range_start + edge], insertedText);
       }
     }
   };

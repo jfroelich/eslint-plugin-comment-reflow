@@ -1,26 +1,19 @@
 import eslint from 'eslint';
-import estree from 'estree';
+import { CommentContext } from './comment-context';
 
-export function createBlockCommentLineUnderflowReport(node: estree.Node, code: eslint.SourceCode, 
-  comment: estree.Comment, line: number, maxLineLength: number, fenced: boolean,
-  lineRangeStart: number) {
-  // Since the logic for handling block and single line comments varies, I figured it would be
-  // better to have a helper for each type of comment. But the caller does not know which type of
-  // comment they are dealing with, and I do not want to have the caller have the burden to know, so
-  // we wait to test the type here.
-
-  if (comment.type !== 'Block') {
+export function createBlockCommentLineUnderflowReport(context: CommentContext) {
+  if (context.comment.type !== 'Block') {
     return;
   }
 
-  if (fenced) {
+  if (context.fenced) {
     return;
   }
 
   // The current line can only underflow when there is a subsequent line. If the current line is the
   // final line of the comment then the current line cannot underflow.
 
-  if (line === comment.loc.end.line) {
+  if (context.line === context.comment.loc.end.line) {
     return;
   }
 
@@ -31,12 +24,12 @@ export function createBlockCommentLineUnderflowReport(node: estree.Node, code: e
   // actual length. In the case of a block comment, ESLint does not remove leading asterisks, which
   // is different behavior than single line comments, so also watch out for that.
 
-  const text = code.lines[line - 1];
+  const text = context.code.lines[context.line - 1];
 
   // If the text length is greater than or equal to the maximum then this is not an underflow. It is
   // possibly overflow, but that is a separate concern.
 
-  if (text.length >= maxLineLength) {
+  if (text.length >= context.max_line_length) {
     return;
   }
 
@@ -46,7 +39,7 @@ export function createBlockCommentLineUnderflowReport(node: estree.Node, code: e
   // return for now. I could merge this with the previous condition but I want to keep it clear for 
   // now.
 
-  if (text.length + 1 === maxLineLength) {
+  if (text.length + 1 === context.max_line_length) {
     return;
   }
 
@@ -64,7 +57,7 @@ export function createBlockCommentLineUnderflowReport(node: estree.Node, code: e
   // asterisk and the directive word. In this case the directive itself should not be deemed to 
   // underflow.
 
-  if (line === 1 && /^\/\*(global|jslint|property)/.test(text)) {
+  if (context.line === 1 && /^\/\*(global|jslint|property)/.test(text)) {
     return;
   }
 
@@ -76,7 +69,7 @@ export function createBlockCommentLineUnderflowReport(node: estree.Node, code: e
 
   // Get the value of the next line. line is 1-based, so the next line is simply at "line".
 
-  let next = code.lines[line];
+  let next = context.code.lines[context.line];
   next = next.trim();
 
   // Underflow can only occur if the next line has some content that we would want to merge into the 
@@ -147,7 +140,7 @@ export function createBlockCommentLineUnderflowReport(node: estree.Node, code: e
   // If there is no space in the next line, and merging the entire next line with the current line 
   // would cause the current line to overflow, then the current line is not underflowing.
 
-  if (edge === -1 && next.length + text.length > maxLineLength) {
+  if (edge === -1 && next.length + text.length > context.max_line_length) {
     return;
   }
 
@@ -155,7 +148,7 @@ export function createBlockCommentLineUnderflowReport(node: estree.Node, code: e
   // current line would cause the current line to overflow, then the current line is not
   // underflowing.
 
-  if (edge !== -1 && edge + text.length > maxLineLength) {
+  if (edge !== -1 && edge + text.length > context.max_line_length) {
     return;
   }
 
@@ -167,19 +160,19 @@ export function createBlockCommentLineUnderflowReport(node: estree.Node, code: e
   }
 
   const report: eslint.Rule.ReportDescriptor = {
-    node,
-    loc: comment.loc,
+    node: context.node,
+    loc: context.comment.loc,
     messageId: 'underflow',
     data: {
       line_length: `${text.length}`,
-      max_length: `${maxLineLength}`
+      max_length: `${context.max_line_length}`
     },
     fix: function (fixer) {
       const adjustment = edge === -1 ? 2 : 3;
       return fixer.replaceTextRange([
-        lineRangeStart + code.lines[line - 1].length,
-        lineRangeStart + code.lines[line - 1].length + 1 + code.lines[line].indexOf('*') + 
-          adjustment
+        context.line_range_start + context.code.lines[context.line - 1].length,
+        context.line_range_start + context.code.lines[context.line - 1].length + 1 + 
+          context.code.lines[context.line].indexOf('*') + adjustment
       ], ' ');
     }
   };
