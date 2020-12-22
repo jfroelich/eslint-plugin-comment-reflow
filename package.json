@@ -1,7 +1,7 @@
 {
   "name": "eslint-plugin-reflow",
   "version": "1.0.0",
-  "main": "index.js",
+  "main": "dist/index.js",
   "license": "MIT",
   "author": {
     "name": "Josh Froelich",
@@ -19,5 +19,9 @@
   },
   "peerDependencies": {
     "eslint": "^7.16.0"
+  },
+  "devDependencies": {
+    "@types/eslint": "^7.2.6",
+    "@types/node": "^14.14.14"
   }
 }

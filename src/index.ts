@@ -1,4 +1,6 @@
-const assert = require('assert');
+import assert from 'assert';
+import eslint from 'eslint';
+import estree from 'estree';
 
 module.exports = {
   rules: {
@@ -16,22 +18,15 @@ module.exports = {
   }
 };
 
-/**
- * @param {import('eslint').Rule.RuleContext} context 
- */
-function createCommentRule(context) {
+function createCommentRule(context: eslint.Rule.RuleContext) {
   return {
-    Program(node) {
+    Program(node: eslint.AST.Program) {
       return analyzeProgram(context, node);
     }
   };
 }
 
-/**
- * @param {import('eslint').Rule.RuleContext} context 
- * @param {import('eslint').AST.Program} node 
- */
-function analyzeProgram(context, node) {
+function analyzeProgram(context: eslint.Rule.RuleContext, node: eslint.AST.Program) {
   let maxLineLength = 80;
   if (context.options && context.options.length) {
     maxLineLength = context.options[0];
@@ -92,16 +87,8 @@ function analyzeProgram(context, node) {
   }
 }
 
-/**
- * @param {import('eslint').AST.Program} node 
- * @param {import('eslint').SourceCode} code 
- * @param {import('estree').Comment} comment 
- * @param {number} line 
- * @param {number} maxLineLength 
- * @param {number} lineRangeStart
- */
-function createLineCommentLineOverflowReport(node, code, comment, line, maxLineLength, 
-  lineRangeStart) {
+function createLineCommentLineOverflowReport(node: eslint.AST.Program, code: eslint.SourceCode, 
+  comment: estree.Comment, line: number, maxLineLength: number, lineRangeStart: number) {
   if (comment.type !== 'Line') {
     return;
   }
@@ -134,39 +121,33 @@ function createLineCommentLineOverflowReport(node, code, comment, line, maxLineL
 
   const edge = text.lastIndexOf(' ', maxLineLength);
 
-  /** @type {import('eslint').Rule.ReportDescriptor} */
-  const report = {};
-  report.node = node;
-  report.loc = comment.loc;
-  report.fix = function (fixer) {
-    if (edge === -1) {
-      const firstOverflowingCharacter = text.charAt(maxLineLength);
-      const insertedText = firstOverflowingCharacter === ' ' ? '\n//' : '\n// ';
-      return fixer.insertTextAfterRange([0, lineRangeStart + maxLineLength], insertedText);
-    } else {
-      const firstOverflowingCharacter = text.charAt(edge);
-      const insertedText = firstOverflowingCharacter === ' ' ? '\n//' : '\n// ';
-      return fixer.insertTextAfterRange([0, lineRangeStart + edge], insertedText);
+  const report: eslint.Rule.ReportDescriptor = {
+    node,
+    loc: comment.loc,
+    messageId: 'overflow',
+    data: {
+      line_length: '' + text.length,
+      max_length: '' + maxLineLength
+    },
+    fix: function (fixer) {
+      if (edge === -1) {
+        const firstOverflowingCharacter = text.charAt(maxLineLength);
+        const insertedText = firstOverflowingCharacter === ' ' ? '\n//' : '\n// ';
+        return fixer.insertTextAfterRange([0, lineRangeStart + maxLineLength], insertedText);
+      } else {
+        const firstOverflowingCharacter = text.charAt(edge);
+        const insertedText = firstOverflowingCharacter === ' ' ? '\n//' : '\n// ';
+        return fixer.insertTextAfterRange([0, lineRangeStart + edge], insertedText);
+      }
     }
   };
-  report.messageId = 'overflow';
-  report.data = {
-    line_length: text.length,
-    max_length: maxLineLength
-  };
+
   return report;
 }
 
-/**
- * @param {import('eslint').SourceCode} code 
- * @param {import('estree').Comment} comment 
- * @param {number} line 
- * @param {number} maxLineLength 
- * @param {boolean} fenced
- * @param {number} lineRangeStart
- */
-function createBlockCommentLineOverflowReport(node, code, comment, line, maxLineLength, fenced,
-  lineRangeStart) {
+function createBlockCommentLineOverflowReport(node: eslint.AST.Program, code: eslint.SourceCode, 
+  comment: estree.Comment, line: number, maxLineLength: number, fenced: boolean,
+  lineRangeStart: number) {
   if (comment.type !== 'Block') {
     return;
   }
@@ -206,47 +187,34 @@ function createBlockCommentLineOverflowReport(node, code, comment, line, maxLine
     edge = text.lastIndexOf(' ', maxLineLength);
   }
 
-  /** @type {import('eslint').Rule.ReportDescriptor} */
-  const report = {};
-  report.node = node;
-  report.loc = comment.loc;
-  report.messageId = 'overflow';
-  report.data = {
-    line_length: text.length,
-    max_length: maxLineLength
-  };
-
-  report.fix = function (fixer) {
-    const text = code.lines[line - 1];
-    if (edge === -1) {
-      const firstOverflowingCharacter = text.charAt(maxLineLength);
-      const insertedText = firstOverflowingCharacter === ' ' ? '\n*' : '\n* ';
-      return fixer.insertTextAfterRange([0, lineRangeStart + maxLineLength], insertedText);
-    } else {
-      const firstOverflowingCharacter = text.charAt(edge);
-      const insertedText = firstOverflowingCharacter === ' ' ? '\n*' : '\n* ';
-      return fixer.insertTextAfterRange([0, lineRangeStart + edge], insertedText);
+  const report: eslint.Rule.ReportDescriptor = {
+    node,
+    loc: comment.loc,
+    messageId: 'overflow',
+    data: {
+      line_length: '' + text.length,
+      max_length: '' + maxLineLength
+    },
+    fix: function (fixer) {
+      const text = code.lines[line - 1];
+      if (edge === -1) {
+        const firstOverflowingCharacter = text.charAt(maxLineLength);
+        const insertedText = firstOverflowingCharacter === ' ' ? '\n*' : '\n* ';
+        return fixer.insertTextAfterRange([0, lineRangeStart + maxLineLength], insertedText);
+      } else {
+        const firstOverflowingCharacter = text.charAt(edge);
+        const insertedText = firstOverflowingCharacter === ' ' ? '\n*' : '\n* ';
+        return fixer.insertTextAfterRange([0, lineRangeStart + edge], insertedText);
+      }
     }
   };
 
   return report;
 }
 
-/**
- * Returns whether the given comment line is a part of a block comment and underflows.
- *
- * @param {import('eslint').AST.Program} node 
- * @param {import('eslint').SourceCode} code the ESLint source code object
- * @param {import('estree').Comment} comment the ESTree Comment token/node/thing
- * @param {number} line the line number of the current line, starting from 1, from the start of the 
- * file
- * @param {number} maxLineLength the threshold for whether a comment is deemed to underflow when
- * evaluating the number of characters in the line
- * @param {boolean} fenced
- * @param {number} lineRangeStart
- */
-function createBlockCommentLineUnderflowReport(node, code, comment, line, maxLineLength, fenced,
-  lineRangeStart) {
+function createBlockCommentLineUnderflowReport(node: eslint.AST.Program, code: eslint.SourceCode, 
+  comment: estree.Comment, line: number, maxLineLength: number, fenced: boolean,
+  lineRangeStart: number) {
   // Since the logic for handling block and single line comments varies, I figured it would be
   // better to have a helper for each type of comment. But the caller does not know which type of
   // comment they are dealing with, and I do not want to have the caller have the burden to know, so
@@ -409,44 +377,30 @@ function createBlockCommentLineUnderflowReport(node, code, comment, line, maxLin
     return;
   }
 
-  // return { type: 'underflow', comment, line, edge: edge };
-
-  /** @type {import('eslint').Rule.ReportDescriptor} */
-  const report = {};
-  report.node = node;
-  report.loc = comment.loc;
-  report.messageId = 'underflow';
-  report.data = {
-    line_length: text.length,
-    max_length: maxLineLength
-  };
-
-  report.fix = function (fixer) {
-    const range = [];
-    range[0] = lineRangeStart + code.lines[line - 1].length;
-    const adjustment = edge === -1 ? 2 : 3;
-    range[1] = range[0] + 1 + code.lines[line].indexOf('*') + adjustment;
-    return fixer.replaceTextRange(range, ' ');
+  const report: eslint.Rule.ReportDescriptor = {
+    node,
+    loc: comment.loc,
+    messageId: 'underflow',
+    data: {
+      line_length: '' + text.length,
+      max_length: '' + maxLineLength
+    },
+    fix: function (fixer) {
+      const adjustment = edge === -1 ? 2 : 3;
+      return fixer.replaceTextRange([
+        lineRangeStart + code.lines[line - 1].length,
+        lineRangeStart + code.lines[line - 1].length + 1 + code.lines[line].indexOf('*') + 
+          adjustment
+      ], ' ');
+    }
   };
 
   return report;
 }
 
-/**
- * Returns whether the given comment line is a part of a line comment and underflows.
- * 
- * @param {import('eslint').AST.Program} node 
- * @param {import('eslint').SourceCode} code the ESLint source code object
- * @param {import('estree').Comment} comment the ESTree Comment token/node/thing
- * @param {number} commentIndex the index of the comment in the comments array
- * @param {number} line the line number of the current line, starting from 1, from the start of the 
- * file
- * @param {number} maxLineLength the threshold for whether a comment is deemed to underflow when
- * evaluating the number of characters in the line
- * @param {number} lineRangeStart
- */
-function createLineCommentLineUnderflowReport(node, code, comment, commentIndex, line, 
-  maxLineLength, lineRangeStart) {
+function createLineCommentLineUnderflowReport(node: eslint.AST.Program, code: eslint.SourceCode, 
+  comment: estree.Comment, commentIndex: number, line: number, maxLineLength: number, 
+  lineRangeStart: number) {
   if (comment.type !== 'Line') {
     return;
   }
@@ -634,22 +588,22 @@ function createLineCommentLineUnderflowReport(node, code, comment, commentIndex,
 
   console.debug('determined edge and that it fits', edge, text.length, edge + text.length);
 
-  /** @type {import('eslint').Rule.ReportDescriptor} */
-  const report = {};
-  report.node = node;
-  report.loc = comment.loc;
-  report.messageId = 'underflow';
-  report.data = {
-    line_length: text.length,
-    max_length: maxLineLength
-  };
-
-  report.fix = function (fixer) {
-    const range = [];
-    range[0] = lineRangeStart + code.lines[line - 1].length;
-    const adjustment = edge === -1 ? 2 : 3;
-    range[1] = range[0] + 1 + code.lines[line].indexOf('//') + adjustment;
-    return fixer.replaceTextRange(range, ' ');
+  const report: eslint.Rule.ReportDescriptor = {
+    node,
+    loc: comment.loc,
+    messageId: 'underflow',
+    data: {
+      line_length: '' + text.length,
+      max_length: '' + maxLineLength
+    },
+    fix: function (fixer) {
+      const adjustment = edge === -1 ? 2 : 3;
+      return fixer.replaceTextRange([
+        lineRangeStart + code.lines[line - 1].length,
+        lineRangeStart + code.lines[line - 1].length + 1 + code.lines[line].indexOf('//') + 
+          adjustment
+      ], ' ');
+    }
   };
 
   return report;
