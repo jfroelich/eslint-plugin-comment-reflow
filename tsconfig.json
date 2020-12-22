@@ -1,0 +1,18 @@
+{
+  "compileOnSave": true,
+  "compilerOptions": {
+    "target": "ES2020",
+    "module": "CommonJS",
+    "outDir": "dist",
+    "sourceMap": false,
+    "esModuleInterop": true,
+    "checkJs": false,
+    "allowJs": false,
+    "declaration": false,
+    "removeComments": true,
+    "noImplicitAny": true
+  },
+  "include": [
+    "src"
+  ]
+}
