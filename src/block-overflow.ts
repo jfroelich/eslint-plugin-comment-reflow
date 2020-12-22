@@ -48,8 +48,8 @@ export function createBlockCommentLineOverflowReport(node: estree.Node, code: es
     loc: comment.loc,
     messageId: 'overflow',
     data: {
-      line_length: '' + text.length,
-      max_length: '' + maxLineLength
+      line_length: `${text.length}`,
+      max_length: `${maxLineLength}`
     },
     fix: function (fixer) {
       const text = code.lines[line - 1];

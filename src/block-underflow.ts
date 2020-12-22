@@ -171,8 +171,8 @@ export function createBlockCommentLineUnderflowReport(node: estree.Node, code: e
     loc: comment.loc,
     messageId: 'underflow',
     data: {
-      line_length: '' + text.length,
-      max_length: '' + maxLineLength
+      line_length: `${text.length}`,
+      max_length: `${maxLineLength}`
     },
     fix: function (fixer) {
       const adjustment = edge === -1 ? 2 : 3;
