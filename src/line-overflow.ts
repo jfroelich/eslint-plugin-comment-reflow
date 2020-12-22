@@ -46,12 +46,13 @@ export function createLineCommentLineOverflowReport(context: CommentContext) {
       if (edge === -1) {
         const firstOverflowingCharacter = text.charAt(context.max_line_length);
         const insertedText = firstOverflowingCharacter === ' ' ? '\n//' : '\n// ';
-        return fixer.insertTextAfterRange([0, context.line_range_start + context.max_line_length], 
-          insertedText);
+        const range: eslint.AST.Range = [0, context.line_range_start + context.max_line_length];
+        return fixer.insertTextAfterRange(range, insertedText);
       } else {
         const firstOverflowingCharacter = text.charAt(edge);
         const insertedText = firstOverflowingCharacter === ' ' ? '\n//' : '\n// ';
-        return fixer.insertTextAfterRange([0, context.line_range_start + edge], insertedText);
+        const range: eslint.AST.Range = [0, context.line_range_start + edge];
+        return fixer.insertTextAfterRange(range, insertedText);
       }
     }
   };

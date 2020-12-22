@@ -200,11 +200,13 @@ export function createLineCommentLineUnderflowReport(context: CommentContext) {
     },
     fix: function (fixer) {
       const adjustment = edge === -1 ? 2 : 3;
-      return fixer.replaceTextRange([
+      const range: eslint.AST.Range = [
         context.line_range_start + context.code.lines[context.line - 1].length,
         context.line_range_start + context.code.lines[context.line - 1].length + 1 + 
           context.code.lines[context.line].indexOf('//') + adjustment
-      ], ' ');
+      ];
+
+      return fixer.replaceTextRange(range, ' ');
     }
   };
 
