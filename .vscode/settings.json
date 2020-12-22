@@ -21,7 +21,7 @@
   "eslint.lintTask.enable": true,
   "eslint.codeActionsOnSave.mode": "all",
   "eslint.onIgnoredFiles": "off",
-  "eslint.debug": true,
+  "eslint.debug": false,
   "npm.autoDetect": "on",
   "git.inputValidationLength": 1000,
   "git.inputValidationSubjectLength": 100,
