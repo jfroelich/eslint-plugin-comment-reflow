@@ -29,6 +29,12 @@ together. So a word wrap algorithm is counterintuitively not only concerned with
 by moving some words into subsequent lines, it is also concerned with merging lines together, and
 moving some words into preceding lines.
 
+The third thing regards how to iterate over comments. ESLint docs say to use an AST selector so that
+you can optimally visit only the relevant nodes. Then it says comments are not in the AST, and that
+the only way to visit comments is to use the comments array. Then it turns out that comments are not
+clearly linked to lines. Instead, we have to iterate over comments, and then iterate over the lines
+involved in each comment.
+
 ## dev notes
 * install local, use `npm install ./localpath`
 * https://eslint.org/docs/developer-guide/working-with-rules

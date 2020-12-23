@@ -35,11 +35,6 @@ function analyzeProgram(context: eslint.Rule.RuleContext, node: estree.Node) {
   
   assert(Number.isInteger(maxLineLength), 'Invalid option for maximum line length');
 
-  // Iterate over the all the comments. We have to do it this way because apparently comments are
-  // not in the AST so no selector is available. Despite iterating over all the comments, however,
-  // we do not look for all the errors to correct at once. We only look for the first error and fix
-  // that and stop. The individual fixes alias akin to DSP filters to give the illusion of reflow.
-
   const code = context.getSourceCode();
   const comments = code.getAllComments();
 
