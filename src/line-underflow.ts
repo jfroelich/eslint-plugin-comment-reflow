@@ -174,7 +174,6 @@ export function createLineCommentLineUnderflowReport(context: CommentContext) {
   // treat the current line as not underflowing.
 
   if (edge === -1 && nextContent.length + text.length > context.max_line_length) {
-    console.debug('no space found in next line, next line does not fit');
     return;
   }
 
@@ -183,12 +182,8 @@ export function createLineCommentLineUnderflowReport(context: CommentContext) {
   // then the current line is not considered underflow.
 
   if (edge !== -1 && edge + text.length > context.max_line_length) {
-    console.debug('space found in next line but does not fit current line "%s"', text,
-      edge + text.length);
     return;
   }
-
-  console.debug('determined edge and that it fits', edge, text.length, edge + text.length);
 
   const report: eslint.Rule.ReportDescriptor = {
     node: context.node,
