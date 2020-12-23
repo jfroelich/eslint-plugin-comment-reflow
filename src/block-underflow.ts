@@ -6,6 +6,24 @@ export function createBlockCommentLineUnderflowReport(context: CommentContext) {
     return;
   }
 
+  // Grab the text of the current line. Since the line number is 1-based, but the lines array is
+  // 0-based, we must substract one. Do not confuse the value of the line with the comment's value.
+  // Also, it looks like ESLint splits by line break to generate the lines array so each line does
+  // not include surrounding line breaks so keep in mind that the length of each line is not its
+  // actual length. In the case of a block comment, ESLint does not remove leading asterisks, which
+  // is different behavior than single line comments, so also watch out for that.
+
+  const text = context.code.lines[context.line - 1];
+
+  // Check if we are transitioning into a fenced section or out of one.
+  // TODO: this needs a lot of improvement
+
+  if (text.trimStart().startsWith('* ```')) {
+    context.fenced = !context.fenced;
+  }
+
+  // If we are in a fenced section then ignore underflow.
+
   if (context.fenced) {
     return;
   }
@@ -16,15 +34,6 @@ export function createBlockCommentLineUnderflowReport(context: CommentContext) {
   if (context.line === context.comment.loc.end.line) {
     return;
   }
-
-  // Grab the text of the current line. Since the line number is 1-based, but the lines array is
-  // 0-based, we must substract one. Do not confuse the value of the line with the comment's value.
-  // Also, it looks like ESLint splits by line break to generate the lines array so each line does
-  // not include surrounding line breaks so keep in mind that the length of each line is not its
-  // actual length. In the case of a block comment, ESLint does not remove leading asterisks, which
-  // is different behavior than single line comments, so also watch out for that.
-
-  const text = context.code.lines[context.line - 1];
 
   // If the text length is greater than or equal to the maximum then this is not an underflow. It is
   // possibly overflow, but that is a separate concern.

@@ -8,5 +8,5 @@ export interface CommentContext {
   comment_index: number;
   line: number;
   max_line_length: number;
-  fenced: boolean;
+  fenced?: boolean;
 }

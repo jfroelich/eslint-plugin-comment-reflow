@@ -40,16 +40,8 @@ function analyzeProgram(context: eslint.Rule.RuleContext, node: estree.Node) {
 
   for (let index = 0; index < comments.length; index++) {
     const comment = comments[index];
-    let fenced = false;
 
     for (let line = comment.loc.start.line; line <= comment.loc.end.line; line++) {
-      if (comment.type === 'Block') {
-        const text = code.lines[line - 1];
-        if (text.trimStart().startsWith('* ```')) {
-          fenced = !fenced;
-        }
-      }
-
       // TODO: we want to reuse this per line of the comment instead of creating from scratch for 
       // each line in the case of a block comment. simultaneously we want to stop calculating the 
       // fence state here and move the calculation to within the helper.
@@ -60,7 +52,6 @@ function analyzeProgram(context: eslint.Rule.RuleContext, node: estree.Node) {
         comment,
         line,
         max_line_length: maxLineLength,
-        fenced,
         comment_index: index
       };
 

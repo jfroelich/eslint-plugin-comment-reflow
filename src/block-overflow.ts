@@ -6,11 +6,30 @@ export function createBlockCommentLineOverflowReport(context: CommentContext) {
     return;
   }
 
+  // Get the text of the current line
+  // TODO: revise so that this is const, if we want to work on altered state that should be a 
+  // different variable
+
+  let text = context.code.lines[context.line - 1];
+
+  // Detect if we are transitioning into a markdown fenced section or out of a mark down fenced 
+  // section.
+  // TODO: this needs to be more accurate and handle cases like no asterisk, multiple fences on 
+  // same line, etc. is jsdoc only validate for asterisk blocks that are well formed?
+  // TODO: this step seems redundant with some later logic, we probably want to do create some 
+  // variable that is reused in several places, the captures indent level and whether this is a 
+  // asterisk block and where the content starts and where the asterisk is located
+
+  if (text.trimStart().startsWith('* ```')) {
+    context.fenced = !context.fenced;
+  }
+
+  // If we are in a markdown-fenced section then do not consider whether we overflow.  
+
   if (context.fenced) {
     return;
   }
 
-  let text = context.code.lines[context.line - 1];
   if (text.length <= context.max_line_length) {
     return;
   }
