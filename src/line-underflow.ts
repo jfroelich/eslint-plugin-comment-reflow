@@ -7,7 +7,7 @@ export function createLineCommentLineUnderflowReport(context: CommentContext) {
     return;
   }
 
-  // Get the text of the line. Do not confuse this with comment value. line is 1 based so we 
+  // Get the text of the line. Do not confuse this with comment value. line is 1 based so we
   // subtract 1 to get the line in the lines array.
 
   const text = context.code.lines[context.line - 1];
@@ -18,7 +18,7 @@ export function createLineCommentLineUnderflowReport(context: CommentContext) {
     return;
   }
 
-  // We must consider that eslint stripped out the line break from the text. Therefore, if we count 
+  // We must consider that eslint stripped out the line break from the text. Therefore, if we count
   // the line break character itself, and we are right at the threshold, this is not underflow.
   if (text.length + 1 === context.max_line_length) {
     return;
@@ -30,7 +30,7 @@ export function createLineCommentLineUnderflowReport(context: CommentContext) {
     return;
   }
 
-  // For a single line comment line to underflow, it must have some content other than the leading 
+  // For a single line comment line to underflow, it must have some content other than the leading
   // comment syntax.
 
   const trimmedText = text.trim();
@@ -38,7 +38,7 @@ export function createLineCommentLineUnderflowReport(context: CommentContext) {
     return;
   }
 
-  // If the current single line comment is an eslint pragma kind of comment then never consider it 
+  // If the current single line comment is an eslint pragma kind of comment then never consider it
   // to underflow.
 
   const content = trimmedText.slice(2).trimStart();
@@ -74,10 +74,10 @@ export function createLineCommentLineUnderflowReport(context: CommentContext) {
     return;
   }
 
-  // For a single line comment to underflow, the next comment must be immediately adjacent to the 
-  // current comment. Recall that we are iterating over an array of comments that may be spread out 
-  // all over the lines array, so the next comment is not guaranteed adjacent. The next comment is 
-  // considered adjacent if the difference between the current line number and the next comment's 
+  // For a single line comment to underflow, the next comment must be immediately adjacent to the
+  // current comment. Recall that we are iterating over an array of comments that may be spread out
+  // all over the lines array, so the next comment is not guaranteed adjacent. The next comment is
+  // considered adjacent if the difference between the current line number and the next comment's
   // line number is 1. We could use comment.loc.end.line or line here.
 
   if (next.loc.start.line - context.line !== 1) {
@@ -88,8 +88,8 @@ export function createLineCommentLineUnderflowReport(context: CommentContext) {
 
   const nextCommentLineText = context.code.lines[context.line];
 
-  // Find where the comment starts. We cannot assume the comment is at the start of the line as it 
-  // could be a trailing comment. We search from the left because we want the first set of slashes, 
+  // Find where the comment starts. We cannot assume the comment is at the start of the line as it
+  // could be a trailing comment. We search from the left because we want the first set of slashes,
   // as any extra slashes are part of the comment's value itself.
 
   const commentStartPosition = nextCommentLineText.indexOf('//');
@@ -98,22 +98,22 @@ export function createLineCommentLineUnderflowReport(context: CommentContext) {
 
   assert(commentStartPosition !== -1, `Invalid comment line "${nextCommentLineText}"`);
 
-  // Grab the content of the comment without the text leading up the comment and without the double 
+  // Grab the content of the comment without the text leading up the comment and without the double
   // forward slashes.
 
   const nextContent = nextCommentLineText.slice(commentStartPosition + 2);
 
-  // For the current line to underflow, the next line has to have some content other than the 
-  // comment syntax or else we assume the author wants to prevent merging, such as forcing a new 
+  // For the current line to underflow, the next line has to have some content other than the
+  // comment syntax or else we assume the author wants to prevent merging, such as forcing a new
   // paragraph.
 
   if (!nextContent) {
     return;
   }
-  
+
   const nextContentLeftTrimmed = nextContent.trimStart();
 
-  // For the current line to underflow, the next line has to have some content other than comment 
+  // For the current line to underflow, the next line has to have some content other than comment
   // syntax and also other than just whitespace.
 
   if (!nextContentLeftTrimmed) {
@@ -152,18 +152,18 @@ export function createLineCommentLineUnderflowReport(context: CommentContext) {
     return;
   }
 
-  // To support word wrap, we want to consider whether the next line can be merged into the current 
-  // line based on whether the first word or two will fit. So we want to find the maximum number of 
-  // tokens we can grab from the next line and merge into the current line. At the moment this is 
-  // rudimentary and looking at just one token at a time, but I will eventually improve this. So, 
-  // in order to find the first word break, we want to search for the break, but starting from a 
-  // position that excludes the initial leading whitespace in the next line comment content. To 
-  // exclude that leading whitespace we first have to measure the number of leading whitespace 
+  // To support word wrap, we want to consider whether the next line can be merged into the current
+  // line based on whether the first word or two will fit. So we want to find the maximum number of
+  // tokens we can grab from the next line and merge into the current line. At the moment this is
+  // rudimentary and looking at just one token at a time, but I will eventually improve this. So,
+  // in order to find the first word break, we want to search for the break, but starting from a
+  // position that excludes the initial leading whitespace in the next line comment content. To
+  // exclude that leading whitespace we first have to measure the number of leading whitespace
   // characters.
 
   const leadingSpaceCount = nextContent.length - nextContentLeftTrimmed.length;
 
-  // Look for the offset of the first word break in the next line content, starting from the 
+  // Look for the offset of the first word break in the next line content, starting from the
   // position after the leading whitespace.
 
   const edge = nextContent.indexOf(' ', leadingSpaceCount);
@@ -198,7 +198,7 @@ export function createLineCommentLineUnderflowReport(context: CommentContext) {
       const range: eslint.AST.Range = [
         // TODO: this feels wrong, this assumes comment starts at start of line?
         context.comment.range[0] + context.code.lines[context.line - 1].length,
-        context.comment.range[0] + context.code.lines[context.line - 1].length + 1 + 
+        context.comment.range[0] + context.code.lines[context.line - 1].length + 1 +
           context.code.lines[context.line].indexOf('//') + adjustment
       ];
 

@@ -42,10 +42,10 @@ export function createBlockCommentLineUnderflowReport(context: CommentContext) {
     return;
   }
 
-  // ESLint stripped the line break character(s) from the text. When we consider the length of the 
-  // line, we have to consider its line break. If the final character is the line break, then we 
-  // actually want 1 before the threshold. Here we are using 1 for line feed, assuming no carriage 
-  // return for now. I could merge this with the previous condition but I want to keep it clear for 
+  // ESLint stripped the line break character(s) from the text. When we consider the length of the
+  // line, we have to consider its line break. If the final character is the line break, then we
+  // actually want 1 before the threshold. Here we are using 1 for line feed, assuming no carriage
+  // return for now. I could merge this with the previous condition but I want to keep it clear for
   // now.
 
   if (text.length + 1 === context.max_line_length) {
@@ -63,14 +63,14 @@ export function createBlockCommentLineUnderflowReport(context: CommentContext) {
 
   // Special handling for jslint directives. According to the docs, the directives can only be
   // specified correctly on the first line of the file, and there cannot be a space between the
-  // asterisk and the directive word. In this case the directive itself should not be deemed to 
+  // asterisk and the directive word. In this case the directive itself should not be deemed to
   // underflow.
 
   if (context.line === 1 && /^\/\*(global|jslint|property)/.test(text)) {
     return;
   }
 
-  // If we are not fenced, and the current line is the fence terminator, then the current line 
+  // If we are not fenced, and the current line is the fence terminator, then the current line
   // should not be considered underflow.
   if (trimmedText.startsWith('* ```')) {
     return;
@@ -81,11 +81,11 @@ export function createBlockCommentLineUnderflowReport(context: CommentContext) {
   let next = context.code.lines[context.line];
   next = next.trim();
 
-  // Underflow can only occur if the next line has some content that we would want to merge into the 
-  // current line. If the next line is empty, then the author has created paragraphs, and we want to 
-  // not merge paragraphs, only sentences. If the next line looks like the last line and does not 
-  // have content, then we want to keep that extra line, because of the javadoc comment style. 
-  // We know that there is a next line because we previously checked that the current line is not 
+  // Underflow can only occur if the next line has some content that we would want to merge into the
+  // current line. If the next line is empty, then the author has created paragraphs, and we want to
+  // not merge paragraphs, only sentences. If the next line looks like the last line and does not
+  // have content, then we want to keep that extra line, because of the javadoc comment style.
+  // We know that there is a next line because we previously checked that the current line is not
   // the final line.
 
   if (next === '*' || next == '*/' || next === '') {
@@ -133,7 +133,7 @@ export function createBlockCommentLineUnderflowReport(context: CommentContext) {
     return;
   }
 
-  // Search for the first intermediate whitespace in the next line. Since the '*' stuff is embedded 
+  // Search for the first intermediate whitespace in the next line. Since the '*' stuff is embedded
   // in the text, we have to skip over that, and we have to skip over the initial space that
   // sometimes follows it.
 
@@ -146,7 +146,7 @@ export function createBlockCommentLineUnderflowReport(context: CommentContext) {
     edge = next.indexOf(' ');
   }
 
-  // If there is no space in the next line, and merging the entire next line with the current line 
+  // If there is no space in the next line, and merging the entire next line with the current line
   // would cause the current line to overflow, then the current line is not underflowing.
 
   if (edge === -1 && next.length + text.length > context.max_line_length) {
@@ -161,14 +161,14 @@ export function createBlockCommentLineUnderflowReport(context: CommentContext) {
     return;
   }
 
-  // Underflow can only occur if the next line does not look like a JSDoc line. We try to run this 
+  // Underflow can only occur if the next line does not look like a JSDoc line. We try to run this
   // regex last since it is expensive.
 
   if (/^\s*\*\s+@[a-zA-Z]+/.test(next)) {
     return;
   }
 
-  // Compute the position of the start of the current line in the whole file. The +1 is the length 
+  // Compute the position of the start of the current line in the whole file. The +1 is the length
   // of the line break (which might be wrong right now).
 
   let lineRangeStart = context.comment.range[0];
@@ -188,7 +188,7 @@ export function createBlockCommentLineUnderflowReport(context: CommentContext) {
       const adjustment = edge === -1 ? 2 : 3;
       const range: eslint.AST.Range = [
         lineRangeStart + context.code.lines[context.line - 1].length,
-        lineRangeStart + context.code.lines[context.line - 1].length + 1 + 
+        lineRangeStart + context.code.lines[context.line - 1].length + 1 +
           context.code.lines[context.line].indexOf('*') + adjustment
       ];
 

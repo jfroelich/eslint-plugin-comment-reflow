@@ -33,7 +33,7 @@ export function createLineCommentLineOverflowReport(context: CommentContext) {
   }
 
   const lineRangeStart = context.comment.range[0];
-  
+
   const edge = text.lastIndexOf(' ', context.max_line_length);
 
   const report: eslint.Rule.ReportDescriptor = {

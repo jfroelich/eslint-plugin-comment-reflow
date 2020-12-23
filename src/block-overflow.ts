@@ -7,24 +7,24 @@ export function createBlockCommentLineOverflowReport(context: CommentContext) {
   }
 
   // Get the text of the current line
-  // TODO: revise so that this is const, if we want to work on altered state that should be a 
+  // TODO: revise so that this is const, if we want to work on altered state that should be a
   // different variable
 
   let text = context.code.lines[context.line - 1];
 
-  // Detect if we are transitioning into a markdown fenced section or out of a mark down fenced 
+  // Detect if we are transitioning into a markdown fenced section or out of a mark down fenced
   // section.
-  // TODO: this needs to be more accurate and handle cases like no asterisk, multiple fences on 
+  // TODO: this needs to be more accurate and handle cases like no asterisk, multiple fences on
   // same line, etc. is jsdoc only validate for asterisk blocks that are well formed?
-  // TODO: this step seems redundant with some later logic, we probably want to do create some 
-  // variable that is reused in several places, the captures indent level and whether this is a 
+  // TODO: this step seems redundant with some later logic, we probably want to do create some
+  // variable that is reused in several places, the captures indent level and whether this is a
   // asterisk block and where the content starts and where the asterisk is located
 
   if (text.trimStart().startsWith('* ```')) {
     context.fenced = !context.fenced;
   }
 
-  // If we are in a markdown-fenced section then do not consider whether we overflow.  
+  // If we are in a markdown-fenced section then do not consider whether we overflow.
 
   if (context.fenced) {
     return;
@@ -42,7 +42,7 @@ export function createBlockCommentLineOverflowReport(context: CommentContext) {
     return;
   }
 
-  // Compute the position of the start of the current line in the whole file. The +1 is the length 
+  // Compute the position of the start of the current line in the whole file. The +1 is the length
   // of the line break (which might be wrong right now).
 
   let lineRangeStart = context.comment.range[0];
@@ -50,7 +50,7 @@ export function createBlockCommentLineOverflowReport(context: CommentContext) {
     lineRangeStart += context.code.lines[line - 1].length + 1;
   }
 
-  // Find the last space in the line. We have to be careful to exclude the leading space following 
+  // Find the last space in the line. We have to be careful to exclude the leading space following
   // an asterisk.
 
   let edge = -1;

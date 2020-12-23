@@ -32,7 +32,7 @@ function analyzeProgram(context: eslint.Rule.RuleContext, node: estree.Node) {
   if (context.options && context.options.length) {
     maxLineLength = <number>context.options[0];
   }
-  
+
   assert(Number.isInteger(maxLineLength), 'Invalid option for maximum line length');
 
   const code = context.getSourceCode();
@@ -41,19 +41,17 @@ function analyzeProgram(context: eslint.Rule.RuleContext, node: estree.Node) {
   for (let index = 0; index < comments.length; index++) {
     const comment = comments[index];
 
-    for (let line = comment.loc.start.line; line <= comment.loc.end.line; line++) {
-      // TODO: we want to reuse this per line of the comment instead of creating from scratch for 
-      // each line in the case of a block comment. simultaneously we want to stop calculating the 
-      // fence state here and move the calculation to within the helper.
+    const commentContext: CommentContext = {
+      node,
+      code,
+      comment,
+      fenced: false,
+      max_line_length: maxLineLength,
+      comment_index: index
+    };
 
-      const commentContext: CommentContext = {
-        node,
-        code,
-        comment,
-        line,
-        max_line_length: maxLineLength,
-        comment_index: index
-      };
+    for (let line = comment.loc.start.line; line <= comment.loc.end.line; line++) {
+      commentContext.line = line;
 
       let report = null;
       report = createBlockCommentLineOverflowReport(commentContext);

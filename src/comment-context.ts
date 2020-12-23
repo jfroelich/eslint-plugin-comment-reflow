@@ -6,7 +6,7 @@ export interface CommentContext {
   code: eslint.SourceCode;
   comment: estree.Comment;
   comment_index: number;
-  line: number;
+  line?: number;
   max_line_length: number;
   fenced?: boolean;
 }
