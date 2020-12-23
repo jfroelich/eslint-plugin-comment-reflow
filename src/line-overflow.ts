@@ -32,6 +32,8 @@ export function createLineCommentLineOverflowReport(context: CommentContext) {
     return;
   }
 
+  const lineRangeStart = context.comment.range[0];
+  
   const edge = text.lastIndexOf(' ', context.max_line_length);
 
   const report: eslint.Rule.ReportDescriptor = {
@@ -46,12 +48,12 @@ export function createLineCommentLineOverflowReport(context: CommentContext) {
       if (edge === -1) {
         const firstOverflowingCharacter = text.charAt(context.max_line_length);
         const insertedText = firstOverflowingCharacter === ' ' ? '\n//' : '\n// ';
-        const range: eslint.AST.Range = [0, context.line_range_start + context.max_line_length];
+        const range: eslint.AST.Range = [0, lineRangeStart + context.max_line_length];
         return fixer.insertTextAfterRange(range, insertedText);
       } else {
         const firstOverflowingCharacter = text.charAt(edge);
         const insertedText = firstOverflowingCharacter === ' ' ? '\n//' : '\n// ';
-        const range: eslint.AST.Range = [0, context.line_range_start + edge];
+        const range: eslint.AST.Range = [0, lineRangeStart + edge];
         return fixer.insertTextAfterRange(range, insertedText);
       }
     }

@@ -23,6 +23,14 @@ export function createBlockCommentLineOverflowReport(context: CommentContext) {
     return;
   }
 
+  // Compute the position of the start of the current line in the whole file. The +1 is the length 
+  // of the line break (which might be wrong right now).
+
+  let lineRangeStart = context.comment.range[0];
+  for (let line = context.comment.loc.start.line; line < context.line; line++) {
+    lineRangeStart += context.code.lines[line - 1].length + 1;
+  }
+
   // Find the last space in the line. We have to be careful to exclude the leading space following 
   // an asterisk.
 
@@ -56,7 +64,7 @@ export function createBlockCommentLineOverflowReport(context: CommentContext) {
         const insertedText = firstOverflowingCharacter === ' ' ? '\n*' : '\n* ';
         const range: eslint.AST.Range = [
           0,
-          context.line_range_start + context.max_line_length
+          lineRangeStart + context.max_line_length
         ];
 
         return fixer.insertTextAfterRange(range, insertedText);
@@ -65,7 +73,7 @@ export function createBlockCommentLineOverflowReport(context: CommentContext) {
         const insertedText = firstOverflowingCharacter === ' ' ? '\n*' : '\n* ';
         const range: eslint.AST.Range = [
           0,
-          context.line_range_start + edge
+          lineRangeStart + edge
         ];
         return fixer.insertTextAfterRange(range, insertedText);
       }

@@ -42,11 +42,9 @@ function analyzeProgram(context: eslint.Rule.RuleContext, node: estree.Node) {
 
   const code = context.getSourceCode();
   const comments = code.getAllComments();
-  let lineRangeStart = 0;
 
   for (let index = 0; index < comments.length; index++) {
     const comment = comments[index];
-    lineRangeStart = comment.range[0];
     let fenced = false;
 
     for (let line = comment.loc.start.line; line <= comment.loc.end.line; line++) {
@@ -68,7 +66,6 @@ function analyzeProgram(context: eslint.Rule.RuleContext, node: estree.Node) {
         line,
         max_line_length: maxLineLength,
         fenced,
-        line_range_start: lineRangeStart,
         comment_index: index
       };
 
@@ -92,9 +89,6 @@ function analyzeProgram(context: eslint.Rule.RuleContext, node: estree.Node) {
       if (report) {
         return context.report(report);
       }
-
-      // -1 because line is 1-based, +1 for line break character (assuming just LF)
-      lineRangeStart += code.lines[line - 1].length + 1;
     }
   }
 }

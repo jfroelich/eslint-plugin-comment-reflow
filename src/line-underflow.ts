@@ -196,8 +196,9 @@ export function createLineCommentLineUnderflowReport(context: CommentContext) {
     fix: function (fixer) {
       const adjustment = edge === -1 ? 2 : 3;
       const range: eslint.AST.Range = [
-        context.line_range_start + context.code.lines[context.line - 1].length,
-        context.line_range_start + context.code.lines[context.line - 1].length + 1 + 
+        // TODO: this feels wrong, this assumes comment starts at start of line?
+        context.comment.range[0] + context.code.lines[context.line - 1].length,
+        context.comment.range[0] + context.code.lines[context.line - 1].length + 1 + 
           context.code.lines[context.line].indexOf('//') + adjustment
       ];
 

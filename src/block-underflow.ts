@@ -159,6 +159,14 @@ export function createBlockCommentLineUnderflowReport(context: CommentContext) {
     return;
   }
 
+  // Compute the position of the start of the current line in the whole file. The +1 is the length 
+  // of the line break (which might be wrong right now).
+
+  let lineRangeStart = context.comment.range[0];
+  for (let line = context.comment.loc.start.line; line < context.line; line++) {
+    lineRangeStart += context.code.lines[line - 1].length + 1;
+  }
+
   const report: eslint.Rule.ReportDescriptor = {
     node: context.node,
     loc: context.comment.loc,
@@ -170,8 +178,8 @@ export function createBlockCommentLineUnderflowReport(context: CommentContext) {
     fix: function (fixer) {
       const adjustment = edge === -1 ? 2 : 3;
       const range: eslint.AST.Range = [
-        context.line_range_start + context.code.lines[context.line - 1].length,
-        context.line_range_start + context.code.lines[context.line - 1].length + 1 + 
+        lineRangeStart + context.code.lines[context.line - 1].length,
+        lineRangeStart + context.code.lines[context.line - 1].length + 1 + 
           context.code.lines[context.line].indexOf('*') + adjustment
       ];
 

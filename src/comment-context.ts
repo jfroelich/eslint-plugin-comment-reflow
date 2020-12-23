@@ -9,5 +9,4 @@ export interface CommentContext {
   line: number;
   max_line_length: number;
   fenced: boolean;
-  line_range_start: number;
 }
