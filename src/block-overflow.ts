@@ -146,6 +146,14 @@ export function createBlockCommentLineOverflowReport(context: CommentContext) {
     return;
   }
 
+  // Do not treat @see jsdoc as overflowing. @see tends to contain large hyperlinks and we generally
+  // do not want to split such hyperlinks. I'd rather not parse urls here and pay for all that
+  // overhead to be able to wrap @see lines so just exit.
+
+  if (content.startsWith('@see')) {
+    return;
+  }
+
   // Locate where to insert a line break. We prefer to not break the line in the midst of a word, so
   // we want to search for some whitespace. This is a bit tricky. First, we have to be careful to
   // not consider the whitespace that is a part of the prefix before the content. Second, we must
