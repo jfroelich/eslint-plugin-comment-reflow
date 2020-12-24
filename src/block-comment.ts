@@ -11,7 +11,8 @@ export function createBlockCommentReport(context: CommentContext) {
     return;
   }
 
-  context.preformatted = false;
+  context.in_markdown_fence = false;
+  context.in_jsdoc_example = false;
 
   // Do not analyze block comments that are not the first token on the line of the start of the
   // comment. I do want to support this eventually but it is more complicated and so for now I want

@@ -15,13 +15,10 @@ export function createBlockCommentLineUnderflowReport(context: CommentContext) {
   // TODO: this needs a lot of improvement
   // TODO: JSDoc @example
 
-  if (text.trimStart().startsWith('* ```')) {
-    context.preformatted = !context.preformatted;
-  }
-
   // If we are in a fenced section then ignore underflow.
+  // TODO: this needs to be updated?
 
-  if (context.preformatted) {
+  if (context.in_markdown_fence) {
     return;
   }
 
