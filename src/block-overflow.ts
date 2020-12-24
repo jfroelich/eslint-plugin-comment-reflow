@@ -154,6 +154,33 @@ export function createBlockCommentLineOverflowReport(context: CommentContext) {
     return;
   }
 
+  // Look for a sub prefix in the content. For example, a markdown list element. Keep in mind that
+  // the prefix includes all of its trailing whitespace, so doubly-indented lists look just like
+  // singly-indented lists in that both appear at the start of the content. One reason we want to
+  // look for this subprefix is because we want to exclude the space that is present following the
+  // punctuation (e.g. the trailing space in "* ") from being detected as a candidate break point.
+  // The second reason is that when inserting a new line and shifting some text down to the next
+  // line, we want to preserve the extra list indentation.
+
+  // For example:
+  // * some long line that is a list bullet point
+  //   starts here on the next line
+  // and not here
+  // * and does not start a new list bullet point.
+
+  // The presumption is that the current comment line is not a list.
+
+  let subPrefix = '';
+
+  // We use a + here instead of a * because I believe markdown only detects a list if there is at
+  // least one space following the punctuation. We use a + instead of matching exactly one space so
+  // that we can tolerate any number of spaces at the start of the list.
+
+  const listMatches = /^([*-]|\d+\.)\s+/.exec(content);
+  if (listMatches && listMatches.length > 0) {
+    subPrefix = listMatches[0];
+  }
+
   // Locate where to insert a line break. We prefer to not break the line in the midst of a word, so
   // we want to search for some whitespace. This is a bit tricky. First, we have to be careful to
   // not consider the whitespace that is a part of the prefix before the content. Second, we must
@@ -170,18 +197,30 @@ export function createBlockCommentLineOverflowReport(context: CommentContext) {
   // In order to search for the string, first we have to determine the scope of the search. We do
   // not want to be searching for spaces that occur after the threshold.
 
-  const haystackEnd = context.max_line_length - lengthOfWhiteSpacePrecedingComment - prefix.length;
+  const haystackEnd = context.max_line_length - lengthOfWhiteSpacePrecedingComment - prefix.length -
+    subPrefix.length;
 
-  // Find a space in the content substring. Keep in mind this is not the position in the line.
+  // Find the last character of the last sequence of whitespace characters in the content substring.
+  // Keep in mind this is not the position in the line.
 
-  let contentBreakingSpacePosition = contentTrimmedEnd.lastIndexOf(' ', haystackEnd);
+  // TODO: we should not be searching all of contentTrimmedEnd, we have to get the content without
+  // the subprefix.
 
-  // We have to consider that we match have matched the last space in a sequence of spaces. But we
-  // want the position of the first space in that sequence.
+  let haystack = contentTrimmedEnd;
+  if (subPrefix.length) {
+    haystack = contentTrimmedEnd.slice(subPrefix.length);
+  }
 
-  if (contentBreakingSpacePosition > -1) {
-    while (contentTrimmedEnd.charAt(contentBreakingSpacePosition - 1) === ' ') {
-      contentBreakingSpacePosition--;
+  const contentBreakingSpaceSequenceEndPosition = haystack.lastIndexOf(' ', haystackEnd);
+
+  // We have to consider that we match have matched the last space in a sequence of spaces. Compute
+  // the position of the first space in that sequence. It is the same position as the end space when
+  // there is only one space.
+
+  let contentBreakingSpaceSequenceStartPosition = contentBreakingSpaceSequenceEndPosition;
+  if (contentBreakingSpaceSequenceStartPosition > -1) {
+    while (contentTrimmedEnd.charAt(contentBreakingSpaceSequenceStartPosition - 1) === ' ') {
+      contentBreakingSpaceSequenceStartPosition--;
     }
   }
 
@@ -190,10 +229,9 @@ export function createBlockCommentLineOverflowReport(context: CommentContext) {
   // a space found at 0, that should never happen because that space should belong to the prefix.
 
   let lineBreakPosition = -1;
-  if (contentBreakingSpacePosition > 0) {
-    // TODO: this might be off by 1?
-    lineBreakPosition = lengthOfWhiteSpacePrecedingComment + prefix.length +
-      contentBreakingSpacePosition;
+  if (contentBreakingSpaceSequenceStartPosition > 0) {
+    lineBreakPosition = lengthOfWhiteSpacePrecedingComment + prefix.length + subPrefix.length +
+      contentBreakingSpaceSequenceStartPosition;
   } else {
     lineBreakPosition = context.max_line_length;
   }
@@ -218,7 +256,11 @@ export function createBlockCommentLineOverflowReport(context: CommentContext) {
   // place. we want to mimic what vscode does i think. look at prefix style and line to decide
   // how to add a prefix to the next line.
 
-  const textToInsert = '\n' + text.slice(0, lengthOfWhiteSpacePrecedingComment + prefix.length);
+  let textToInsert = '\n' + text.slice(0, lengthOfWhiteSpacePrecedingComment + prefix.length);
+
+  if (subPrefix.length > 0) {
+    textToInsert += ''.padEnd(subPrefix.length, ' ');
+  }
 
   return <eslint.Rule.ReportDescriptor>{
     node: context.node,
