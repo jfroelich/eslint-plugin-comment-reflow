@@ -6,11 +6,49 @@ export function createBlockCommentLineOverflowReport(context: CommentContext) {
     return;
   }
 
-  // Get the text of the current line
-  // TODO: revise so that this is const, if we want to work on altered state that should be a
-  // different variable
+  // Obtain the previous token. Block comments are tokens of type Block. If the comment is the start
+  // of the file or all characters from the start of the file to the comment are whitespace, then
+  // there is no previous token.
+
+  // TODO: this is evaluated per line, but it seems like it would make more sense to evaluate it
+  // once per comment? But that would mean this whole setup is wrong. I think the for loop might
+  // need to get more complicated if we want to optimize. Like, instead of going straight to line
+  // iteration, we call out to a block or line helper for the entire comment. each helper is
+  // separately responsible for doing the line iteration along with any other kinds of extra work
+  // it wants to do.
+
+  const previousToken = context.code.getTokenBefore(context.comment, { includeComments: true });
+
+  // Bail when there is a previous token on the same line.
+  // TODO: support trailing comments
+
+  if (previousToken && previousToken.loc.end.line === context.comment.loc.start.line) {
+    console.debug('detected trailing block comment, exiting overflow analysis');
+    return;
+  }
+
+  // Determine if the current line of this comment is the first line of the comment and if it is
+  // not the first token on the line. Since whitespace is unfortunately not tokenized
+
+  // Get the text of the current line. The line is 1-based but the index of the line in the lines
+  // array is 0 based. The text does not include line break characters. The text may include
+  // characters that are not a part of the comment. The text includes the comment syntax.
 
   const text = context.code.lines[context.line - 1];
+
+  // If the text of the line, less its line break characters, is less than the threshold then the
+  // line does not overflow. We want to check this as early as possible and exit as fast as
+  // possible. Keep in mind that this counts tab characters as a single character.
+
+  if (text.length <= context.max_line_length) {
+    return;
+  }
+
+  // TODO: we cannot assume that the comment is the start of the line. We have to detect if we are
+  // in a trailing context here. Maybe for now we shouldn't even handle trailing comments and at
+  // least do nothing instead of doing something strange.
+
+  const textTrimmedStart = text.trimStart();
 
   // Detect if we are transitioning into a markdown fenced section or out of a mark down fenced
   // section.
@@ -20,8 +58,6 @@ export function createBlockCommentLineOverflowReport(context: CommentContext) {
   // variable that is reused in several places, the captures indent level and whether this is a
   // asterisk block and where the content starts and where the asterisk is located
 
-  const textTrimmedStart = text.trimStart();
-
   if (textTrimmedStart.startsWith('* ```')) {
     context.fenced = !context.fenced;
   }
@@ -29,13 +65,6 @@ export function createBlockCommentLineOverflowReport(context: CommentContext) {
   // If we are in a markdown-fenced section then do not consider whether we overflow.
 
   if (context.fenced) {
-    return;
-  }
-
-  // If the entire text of the line (not just the part of the line that is the comment) is less than
-  // the threshold then the line does not overflow.
-
-  if (text.length <= context.max_line_length) {
     return;
   }
 
@@ -54,6 +83,10 @@ export function createBlockCommentLineOverflowReport(context: CommentContext) {
   // of the line break (which might be wrong right now). This is computed starting from the start of
   // the comment. We could be on the first line of the comment or some later line. The loop is not
   // entered when we are on the first line.
+
+  // TODO: take another look at code.getIndexFromLoc. I think we can use line number with column 0
+  // to obtain the line range start instead of computing it ourselves. Look at the source code of
+  // eslint for documentation.
 
   let lineRangeStart = context.comment.range[0];
   for (let line = context.comment.loc.start.line; line < context.line; line++) {
@@ -78,6 +111,7 @@ export function createBlockCommentLineOverflowReport(context: CommentContext) {
   }
 
   // Compute the range of the text after which we will insert some new text.
+  // TODO: look at getIndexFromLoc
 
   let insertAfterRange: eslint.AST.Range;
   if (edge === -1) {
