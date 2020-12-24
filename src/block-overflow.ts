@@ -2,10 +2,6 @@ import eslint from 'eslint';
 import { CommentContext } from './comment-context';
 
 export function createBlockCommentLineOverflowReport(context: CommentContext) {
-  if (context.comment.type !== 'Block') {
-    return;
-  }
-
   // Get the text of the current line. The line is 1-based but the index of the line in the lines
   // array is 0 based. The text does not include line break characters. The text may include
   // characters that are not a part of the comment. The text includes the comment syntax. We assume

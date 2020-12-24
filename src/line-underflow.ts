@@ -3,10 +3,6 @@ import eslint from 'eslint';
 import { CommentContext } from './comment-context';
 
 export function createLineCommentLineUnderflowReport(context: CommentContext) {
-  if (context.comment.type !== 'Line') {
-    return;
-  }
-
   // Get the text of the line. Do not confuse this with comment value. line is 1 based so we
   // subtract 1 to get the line in the lines array.
 

@@ -2,10 +2,6 @@ import eslint from 'eslint';
 import { CommentContext } from './comment-context';
 
 export function createLineCommentLineOverflowReport(context: CommentContext) {
-  if (context.comment.type !== 'Line') {
-    return;
-  }
-
   const text = context.code.lines[context.line - 1];
   if (text.length <= context.max_line_length) {
     return;

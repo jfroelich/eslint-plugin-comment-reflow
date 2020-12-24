@@ -7,6 +7,10 @@ import { CommentContext } from './comment-context';
  * linting errors because ESLint reevaluates after each fix. Returns undefined if no error is found.
  */
 export function createBlockCommentReport(context: CommentContext) {
+  if (context.comment.type !== 'Block') {
+    return;
+  }
+
   context.preformatted = false;
 
   // Do not analyze block comments that are not the first token on the line of the start of the

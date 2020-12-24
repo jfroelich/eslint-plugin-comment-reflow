@@ -2,10 +2,6 @@ import eslint from 'eslint';
 import { CommentContext } from './comment-context';
 
 export function createBlockCommentLineUnderflowReport(context: CommentContext) {
-  if (context.comment.type !== 'Block') {
-    return;
-  }
-
   // Grab the text of the current line. Since the line number is 1-based, but the lines array is
   // 0-based, we must substract one. Do not confuse the value of the line with the comment's value.
   // Also, it looks like ESLint splits by line break to generate the lines array so each line does
