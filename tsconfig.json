@@ -11,7 +11,8 @@
     "allowJs": false,
     "declaration": false,
     "removeComments": true,
-    "noImplicitAny": true
+    "noImplicitAny": true,
+    "strictNullChecks": false
   },
   "include": [
     "src"
