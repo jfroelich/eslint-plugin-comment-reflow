@@ -6,33 +6,12 @@ export function createBlockCommentLineOverflowReport(context: CommentContext) {
     return;
   }
 
-  // Obtain the previous token. Block comments are tokens of type Block. If the comment is the start
-  // of the file or all characters from the start of the file to the comment are whitespace, then
-  // there is no previous token.
-
-  // TODO: this is evaluated per line, but it seems like it would make more sense to evaluate it
-  // once per comment? But that would mean this whole setup is wrong. I think the for loop might
-  // need to get more complicated if we want to optimize. Like, instead of going straight to line
-  // iteration, we call out to a block or line helper for the entire comment. each helper is
-  // separately responsible for doing the line iteration along with any other kinds of extra work
-  // it wants to do.
-
-  const previousToken = context.code.getTokenBefore(context.comment, { includeComments: true });
-
-  // Bail when there is a previous token on the same line.
-  // TODO: support trailing comments
-
-  if (previousToken && previousToken.loc.end.line === context.comment.loc.start.line) {
-    console.debug('detected trailing block comment, exiting overflow analysis');
-    return;
-  }
-
-  // Determine if the current line of this comment is the first line of the comment and if it is
-  // not the first token on the line. Since whitespace is unfortunately not tokenized
-
   // Get the text of the current line. The line is 1-based but the index of the line in the lines
   // array is 0 based. The text does not include line break characters. The text may include
-  // characters that are not a part of the comment. The text includes the comment syntax.
+  // characters that are not a part of the comment. The text includes the comment syntax. We assume
+  // that the caller checked that the comment is the first token on the line where the comment
+  // starts, so here we know that any text preceding the start of the comment on the line is only
+  // whitespace.
 
   const text = context.code.lines[context.line - 1];
 
@@ -43,6 +22,18 @@ export function createBlockCommentLineOverflowReport(context: CommentContext) {
   if (text.length <= context.max_line_length) {
     return;
   }
+
+  // ESLint refers to the position of a character in the entire file as an index. Get the index of
+  // the start of the current line.
+
+  // const lineStartIndex = context.code.getIndexFromLoc({
+  //   line: context.line,
+  //   column: 0
+  // });
+  // console.debug('line start index:', lineStartIndex);
+
+  // Determine if the current line of this comment is the first line of the comment and if it is
+  // not the first token on the line. Since whitespace is unfortunately not tokenized
 
   // TODO: we cannot assume that the comment is the start of the line. We have to detect if we are
   // in a trailing context here. Maybe for now we shouldn't even handle trailing comments and at
@@ -59,12 +50,12 @@ export function createBlockCommentLineOverflowReport(context: CommentContext) {
   // asterisk block and where the content starts and where the asterisk is located
 
   if (textTrimmedStart.startsWith('* ```')) {
-    context.fenced = !context.fenced;
+    context.preformatted = !context.preformatted;
   }
 
   // If we are in a markdown-fenced section then do not consider whether we overflow.
 
-  if (context.fenced) {
+  if (context.preformatted) {
     return;
   }
 

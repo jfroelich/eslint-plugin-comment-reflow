@@ -40,5 +40,5 @@ export interface CommentContext {
    * Whether the processing state of the comment is currently within a multi-line markdown code
    * section.
    */
-  fenced?: boolean;
+  preformatted?: boolean;
 }

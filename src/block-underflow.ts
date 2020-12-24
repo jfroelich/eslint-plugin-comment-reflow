@@ -15,16 +15,17 @@ export function createBlockCommentLineUnderflowReport(context: CommentContext) {
 
   const text = context.code.lines[context.line - 1];
 
-  // Check if we are transitioning into a fenced section or out of one.
+  // Check if we are transitioning into a preformatted section or out of one.
   // TODO: this needs a lot of improvement
+  // TODO: JSDoc @example
 
   if (text.trimStart().startsWith('* ```')) {
-    context.fenced = !context.fenced;
+    context.preformatted = !context.preformatted;
   }
 
   // If we are in a fenced section then ignore underflow.
 
-  if (context.fenced) {
+  if (context.preformatted) {
     return;
   }
 

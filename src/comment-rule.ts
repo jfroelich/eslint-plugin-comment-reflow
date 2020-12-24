@@ -1,11 +1,9 @@
 import assert from 'assert';
 import eslint from 'eslint';
 import estree from 'estree';
-import { createBlockCommentLineOverflowReport } from './block-overflow';
-import { createBlockCommentLineUnderflowReport } from './block-underflow';
+import { createBlockCommentReport } from './block-comment';
 import { CommentContext } from './comment-context';
-import { createLineCommentLineOverflowReport } from './line-overflow';
-import { createLineCommentLineUnderflowReport } from './line-underflow';
+import { createLineCommentReport } from './line-comment';
 
 export const commentRule: eslint.Rule.RuleModule = {
   meta: {
@@ -39,40 +37,22 @@ function analyzeProgram(context: eslint.Rule.RuleContext, node: estree.Node) {
   const comments = code.getAllComments();
 
   for (let index = 0; index < comments.length; index++) {
-    const comment = comments[index];
-
     const commentContext: CommentContext = {
       node,
       code,
-      comment,
-      fenced: false,
+      comment: comments[index],
       max_line_length: maxLineLength,
       comment_index: index
     };
 
-    for (let line = comment.loc.start.line; line <= comment.loc.end.line; line++) {
-      commentContext.line = line;
+    let report = createBlockCommentReport(commentContext);
+    if (report) {
+      return context.report(report);
+    }
 
-      let report = null;
-      report = createBlockCommentLineOverflowReport(commentContext);
-      if (report) {
-        return context.report(report);
-      }
-
-      report = createLineCommentLineOverflowReport(commentContext);
-      if (report) {
-        return context.report(report);
-      }
-
-      report = createBlockCommentLineUnderflowReport(commentContext);
-      if (report) {
-        return context.report(report);
-      }
-
-      report = createLineCommentLineUnderflowReport(commentContext);
-      if (report) {
-        return context.report(report);
-      }
+    report = createLineCommentReport(commentContext);
+    if (report) {
+      return context.report(report);
     }
   }
 }
