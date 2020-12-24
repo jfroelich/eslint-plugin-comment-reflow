@@ -48,9 +48,6 @@ export function createBlockCommentLineOverflowReport(context: CommentContext) {
   // consider the slash, star or stars, and subsequent whitespace. For other lines, we have to
   // consider the star and or subsequent whitespace.
 
-  // TODO: limit prefix to have at most one trailing space, and detect post prefix whitespace
-  // preceding content as a separate variable
-
   let prefix = '';
   if (context.line === context.comment.loc.start.line) {
     const matches = /\/\*\*?\s*/.exec(textTrimmedStart);
@@ -86,9 +83,8 @@ export function createBlockCommentLineOverflowReport(context: CommentContext) {
   // TODO: is it only correct to check for markdown when in a javadoc-style comment?
 
   if (context.in_markdown_fence) {
-    if (content.startsWith('```')) {
+    if (context.line > context.comment.loc.start.line && content.startsWith('```')) {
       context.in_markdown_fence = false;
-
       // never detect overflow on the line exiting from markdown fence
       return;
     } else {
@@ -97,20 +93,24 @@ export function createBlockCommentLineOverflowReport(context: CommentContext) {
     }
   } else if (context.in_jsdoc_example) {
     if (content.startsWith('@')) {
-      context.in_jsdoc_example = false;
-      // do not return, this line is not part of example, still want to detect overflow
+      if (content.startsWith('@example')) {
+        // never detect overflow if there is a subsequent example
+        return;
+      } else {
+        context.in_jsdoc_example = false;
+        // do not return, we are no longer in an example
+      }
     } else {
       // never detect overflow while in jsdoc example
       return;
     }
-  } else if (content.startsWith('```')) {
+  } else if (context.line > context.comment.loc.start.line && content.startsWith('```')) {
     context.in_markdown_fence = true;
-
-    // do not detect overflow on the line entering markdown fence
+    // never detect overflow on the line entering markdown fence
     return;
-  } else if (content.startsWith('@example')) {
+  } else if (context.line > context.comment.loc.start.line && content.startsWith('@example')) {
     context.in_jsdoc_example = true;
-    // do not deetect overflow on the line entering jsdoc example
+    // never detect overflow on the line entering jsdoc example
     return;
   }
 
@@ -129,13 +129,10 @@ export function createBlockCommentLineOverflowReport(context: CommentContext) {
   const lengthOfWhiteSpacePrecedingComment = text.length - textTrimmedStart.length;
 
   if (lengthOfWhiteSpacePrecedingComment >= context.max_line_length) {
-    console.debug('too much leading whitespace to even consider overflow on line', context.line);
     return;
   }
 
   if (lengthOfWhiteSpacePrecedingComment + prefix.length >= context.max_line_length) {
-    console.debug('too much leading whitespace together with comment prefix to even consider overflow on line',
-      context.line);
     return;
   }
 
@@ -176,7 +173,6 @@ export function createBlockCommentLineOverflowReport(context: CommentContext) {
 
   if (contentBreakingSpacePosition > -1) {
     while (contentTrimmedEnd.charAt(contentBreakingSpacePosition - 1) === ' ') {
-      console.debug('subtracting 1 space');
       contentBreakingSpacePosition--;
     }
   }
@@ -193,9 +189,6 @@ export function createBlockCommentLineOverflowReport(context: CommentContext) {
   } else {
     lineBreakPosition = context.max_line_length;
   }
-
-  console.debug('Line %d should be split at position %d, remainder is "%s"', context.line,
-    lineBreakPosition, text.slice(lineBreakPosition));
 
   // Compute the range of the text after which we will insert some new text. This range is relative
   // to the entire file.
@@ -218,8 +211,6 @@ export function createBlockCommentLineOverflowReport(context: CommentContext) {
   // how to add a prefix to the next line.
 
   const textToInsert = '\n' + text.slice(0, lengthOfWhiteSpacePrecedingComment + prefix.length);
-
-  console.debug('text to insert "%s"', textToInsert.replace(/\n/g, '\\n'));
 
   return <eslint.Rule.ReportDescriptor>{
     node: context.node,
