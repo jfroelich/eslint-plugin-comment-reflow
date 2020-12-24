@@ -1,7 +1,7 @@
-import { commentRule } from './comment-rule';
+import { commentLengthRule } from './comment-length-rule';
 
 export = {
   rules: {
-    comment: commentRule
+    'comment-length': commentLengthRule
   }
 };

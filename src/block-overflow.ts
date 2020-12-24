@@ -48,7 +48,8 @@ export function createBlockCommentLineOverflowReport(context: CommentContext) {
   // consider the slash, star or stars, and subsequent whitespace. For other lines, we have to
   // consider the star and or subsequent whitespace.
 
-  // TODO: limit prefix to have at most one trailing space?
+  // TODO: limit prefix to have at most one trailing space, and detect post prefix whitespace
+  // preceding content as a separate variable
 
   let prefix = '';
   if (context.line === context.comment.loc.start.line) {
@@ -211,6 +212,10 @@ export function createBlockCommentLineOverflowReport(context: CommentContext) {
   // carried over, but we want to get rid of them.
 
   // TODO: we need to figure out whether to insert CRLF or just LF
+
+  // TODO: do not copy over the prefix as is if it is line 1, that will put a slash in the wrong
+  // place. we want to mimic what vscode does i think. look at prefix style and line to decide
+  // how to add a prefix to the next line.
 
   const textToInsert = '\n' + text.slice(0, lengthOfWhiteSpacePrecedingComment + prefix.length);
 

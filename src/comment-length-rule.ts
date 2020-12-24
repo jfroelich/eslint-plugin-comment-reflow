@@ -5,7 +5,7 @@ import { createBlockCommentReport } from './block-comment';
 import { CommentContext } from './comment-context';
 import { createLineCommentReport } from './line-comment';
 
-export const commentRule: eslint.Rule.RuleModule = {
+export const commentLengthRule: eslint.Rule.RuleModule = {
   meta: {
     type: 'layout',
     fixable: 'whitespace',
@@ -14,10 +14,10 @@ export const commentRule: eslint.Rule.RuleModule = {
       underflow: 'Comment underflows'
     }
   },
-  create: createCommentRule
+  create: createCommentLengthRule
 };
 
-function createCommentRule(context: eslint.Rule.RuleContext) {
+function createCommentLengthRule(context: eslint.Rule.RuleContext) {
   return {
     Program(node: estree.Node) {
       return analyzeProgram(context, node);
