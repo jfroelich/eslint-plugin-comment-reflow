@@ -43,13 +43,12 @@ export function createBlockCommentLineOverflowReport(context: CommentContext) {
 
   const textTrimmedStart = text.trimStart();
 
-  // TEMP: disabled at the moment, not yet in use, will be very soon
-  // const precedingWhitespaceLength = text.length - textTrimmedStart.length;
-
   // Next, compute the start of the content within the comment line by determining the length of
   // what I refer to as the "prefix". The prefix length may be zero. For the first line, we have to
   // consider the slash, star or stars, and subsequent whitespace. For other lines, we have to
   // consider the star and or subsequent whitespace.
+
+  // TODO: limit prefix to have at most one trailing space?
 
   let prefix = '';
   if (context.line === context.comment.loc.start.line) {
@@ -126,6 +125,19 @@ export function createBlockCommentLineOverflowReport(context: CommentContext) {
     return;
   }
 
+  const lengthOfWhiteSpacePrecedingComment = text.length - textTrimmedStart.length;
+
+  if (lengthOfWhiteSpacePrecedingComment >= context.max_line_length) {
+    console.debug('too much leading whitespace to even consider overflow on line', context.line);
+    return;
+  }
+
+  if (lengthOfWhiteSpacePrecedingComment + prefix.length >= context.max_line_length) {
+    console.debug('too much leading whitespace together with comment prefix to even consider overflow on line',
+      context.line);
+    return;
+  }
+
   // Do not treat tslint directives as overflowing. tslint directives are expressed on a single line
   // of the block comment (at least that is what I understand). Since we could be on any line of the
   // comment, we want to check if we are on the first line of the comment. We tolerate leading
@@ -136,41 +148,73 @@ export function createBlockCommentLineOverflowReport(context: CommentContext) {
     return;
   }
 
-  ////////////////////////////////////////////////////////////////////////////////////
-  // AFTER THIS LINE IS OLDER CODE ABOUT TO BE REVISED
+  // Locate where to insert a line break. We prefer to not break the line in the midst of a word, so
+  // we want to search for some whitespace. This is a bit tricky. First, we have to be careful to
+  // not consider the whitespace that is a part of the prefix before the content. Second, we must
+  // consider that the content may have trailing whitespace. Third, we have to consider that the
+  // JavaScript standard library does not give us any nice tool to do this. Once we grab a substring
+  // and search it we are getting the offsets in that substring. We want the offset relative to the
+  // entire line, but we want to only search a part of it. For now we are only looking at the
+  // canonical space because for now I prefer not to use a regex.
 
-  // Find the last space in the line. We have to be careful to exclude the leading space following
-  // an asterisk.
+  // To avoid considering trailing whitespace, trim the end of the content.
 
-  let edge = -1;
-  if (textTrimmedStart.startsWith('* ')) {
-    edge = textTrimmedStart.slice(2).lastIndexOf(' ', context.max_line_length - 2);
+  const contentTrimmedEnd = content.trimEnd();
 
-    // the slice wreaks some havoc on the offset
-    if (edge + 3 > context.max_line_length) {
-      edge = context.max_line_length;
-    } else if (edge !== -1) {
-      edge = edge + 3;
+  // In order to search for the string, first we have to determine the scope of the search. We do
+  // not want to be searching for spaces that occur after the threshold.
+
+  const haystackEnd = context.max_line_length - lengthOfWhiteSpacePrecedingComment - prefix.length;
+
+  // Find a space in the content substring. Keep in mind this is not the position in the line.
+
+  let contentBreakingSpacePosition = contentTrimmedEnd.lastIndexOf(' ', haystackEnd);
+
+  // We have to consider that we match have matched the last space in a sequence of spaces. But we
+  // want the position of the first space in that sequence.
+
+  if (contentBreakingSpacePosition > -1) {
+    while (contentTrimmedEnd.charAt(contentBreakingSpacePosition - 1) === ' ') {
+      console.debug('subtracting 1 space');
+      contentBreakingSpacePosition--;
     }
-  } else {
-    edge = textTrimmedStart.lastIndexOf(' ', context.max_line_length);
   }
 
-  // Compute the range of the text after which we will insert some new text.
-  // TODO: look at getIndexFromLoc
+  // Determine the breaking point in the line itself, taking into account whether we found a space.
+  // If no breaking point was found then fallback to breaking at the threshold. Note we rule out
+  // a space found at 0, that should never happen because that space should belong to the prefix.
 
-  let insertAfterRange: eslint.AST.Range;
-  if (edge === -1) {
-    insertAfterRange = [0, lineStartIndex + context.max_line_length];
+  let lineBreakPosition = -1;
+  if (contentBreakingSpacePosition > 0) {
+    // TODO: this might be off by 1?
+    lineBreakPosition = lengthOfWhiteSpacePrecedingComment + prefix.length +
+      contentBreakingSpacePosition;
   } else {
-    insertAfterRange = [0, lineStartIndex + edge];
+    lineBreakPosition = context.max_line_length;
   }
 
-  // Build the text to insert.
+  console.debug('Line %d should be split at position %d, remainder is "%s"', context.line,
+    lineBreakPosition, text.slice(lineBreakPosition));
 
-  const firstOverflowingCharacter = edge === -1 ?
-    text.charAt(context.max_line_length) : text.charAt(edge);
-  const textToInsert = firstOverflowingCharacter === ' ' ? '\n*' : '\n* ';
+  // Compute the range of the text after which we will insert some new text. This range is relative
+  // to the entire file.
+
+  const insertAfterRange: eslint.AST.Range = [0, lineStartIndex + lineBreakPosition];
+
+  // Build the text to insert. We want to carry over the same preceding whitespace content and the
+  // same prefix.
+
+  // TODO: we need to conditionally trim. But we cannot trim if we are just inserting. Therefore,
+  // I think we cannot use insert. We have to use replace. Or we have to consider both, based on
+  // whether there is whitespace or not. To test, use a breaking sequence of a couple spaces and
+  // notice how the next line is has strange post-prefix indent, because the extra spaces are
+  // carried over, but we want to get rid of them.
+
+  // TODO: we need to figure out whether to insert CRLF or just LF
+
+  const textToInsert = '\n' + text.slice(0, lengthOfWhiteSpacePrecedingComment + prefix.length);
+
+  console.debug('text to insert "%s"', textToInsert.replace(/\n/g, '\\n'));
 
   return <eslint.Rule.ReportDescriptor>{
     node: context.node,
