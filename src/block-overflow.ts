@@ -12,9 +12,9 @@ export function createBlockCommentLineOverflowReport(context: CommentContext) {
 
   const text = context.code.lines[context.line - 1];
 
-  // Determine the index of the current line. The term "index" here aligns with what ESLint
-  // sometimes refers to in various places in its API which is basically the offset of the first
-  // character of the line relative to the first character in the entire file, which has index 0.
+  // Determine the index of the current line. The term "index" here aligns with what ESLint refers
+  // to as the offset of the first character of the line relative to the first character in the
+  // entire file, which has index 0.
 
   // An alternative approach to calculating this value would be to sum up the lengths of the
   // previous lines. But it turns out that approach has not so obvious complexity. We do not have
@@ -34,19 +34,14 @@ export function createBlockCommentLineOverflowReport(context: CommentContext) {
   // comment. The driving principle is that we use the amount of preceding whitespace of the current
   // line to determine the appropriate amount of preceding whitespace to specify for the new line
   // that we plan to introduce. We do not try to maintain the indent relative to only the first line
-  // of the comment because this way we can uniformly handle lines that have different indentation.
-
-  // In calculating the amount of preceding whitespace, we could use a regex, but I want to minimize
-  // the uses of regex.
-  // TODO: but since we are using a regex for the prefix we can probably just use a capture in that
-  // regex to accomplish this?
+  // of the comment because this way we can uniformly handle lines that have varying indentation.
 
   const textTrimmedStart = text.trimStart();
 
-  // Next, compute the start of the content within the comment line by determining the length of
-  // what I refer to as the "prefix". The prefix length may be zero. For the first line, we have to
-  // consider the slash, star or stars, and subsequent whitespace. For other lines, we have to
-  // consider the star and or subsequent whitespace.
+  // Next, compute the start of the content within the comment line by determining the length of the
+  // "prefix". The length may be zero. For the first line, we have to consider the slash, star or
+  // stars, and subsequent whitespace. For other lines, we have to consider the star and or
+  // subsequent whitespace.
 
   let prefix = '';
   if (context.line === context.comment.loc.start.line) {
