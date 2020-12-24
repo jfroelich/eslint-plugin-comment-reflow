@@ -194,22 +194,30 @@ export function createBlockCommentLineOverflowReport(context: CommentContext) {
 
   const contentTrimmedEnd = content.trimEnd();
 
+  // Now that we trimmed the end of the content, we want to again check for whether we actually
+  // overflow. The previous check counted trailing whitespace characters. This check does not.
+
+  if ((lengthOfWhiteSpacePrecedingComment + prefix.length + contentTrimmedEnd.length) <=
+    context.max_line_length) {
+    return;
+  }
+
   // In order to search for the string, first we have to determine the scope of the search. We do
   // not want to be searching for spaces that occur after the threshold.
 
   const haystackEnd = context.max_line_length - lengthOfWhiteSpacePrecedingComment - prefix.length -
     subPrefix.length;
 
-  // Find the last character of the last sequence of whitespace characters in the content substring.
-  // Keep in mind this is not the position in the line.
-
-  // TODO: we should not be searching all of contentTrimmedEnd, we have to get the content without
-  // the subprefix.
+  // We have to take into account the length of the sub prefix so that we do not match spaces in the
+  // sub prefix.
 
   let haystack = contentTrimmedEnd;
   if (subPrefix.length) {
     haystack = contentTrimmedEnd.slice(subPrefix.length);
   }
+
+  // Find the last character of the last sequence of whitespace characters in the content substring.
+  // Keep in mind this is not the position in the line.
 
   const contentBreakingSpaceSequenceEndPosition = haystack.lastIndexOf(' ', haystackEnd);
 
