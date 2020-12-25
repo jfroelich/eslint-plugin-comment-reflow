@@ -84,7 +84,7 @@ export function parseLine(code: eslint.SourceCode, comment: estree.Comment, line
 
   output.content_trimmed = output.content.trimEnd();
 
-  if (line === comment.loc.end.line) {
+  if (comment.type === 'Block' && line === comment.loc.end.line) {
     output.suffix = output.text.slice(output.text.length - output.text_trimmed_start.length +
       output.prefix.length + output.content_trimmed.length, comment.loc.end.column);
   } else {
