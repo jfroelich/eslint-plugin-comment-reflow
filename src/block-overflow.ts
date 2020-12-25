@@ -255,15 +255,25 @@ export function createBlockCommentLineOverflowReport(context: CommentContext) {
 
   // TODO: we need to figure out whether to insert CRLF or just LF
 
-  // TODO: do not copy over the prefix as is if it is line 1, that will put a slash in the wrong
-  // place. we want to mimic what vscode does i think. look at prefix style and line to decide
-  // how to add a prefix to the next line.
+  let textToInsert = '\n';
 
-  let textToInsert = '\n' + text.slice(0, lengthOfWhiteSpacePrecedingComment + prefix.length);
+  if (context.line === context.comment.loc.start.line) {
+    textToInsert += text.slice(0, lengthOfWhiteSpacePrecedingComment);
+    if (prefix.startsWith('/**')) {
+      textToInsert += ' *';
+      if (contentBreakingSpaceSequenceStartPosition === -1) {
+        textToInsert += ' ';
+      }
+    }
+  } else {
+    textToInsert += text.slice(0, lengthOfWhiteSpacePrecedingComment + prefix.length);
+  }
 
   if (subPrefix.length > 0) {
     textToInsert += ''.padEnd(subPrefix.length, ' ');
   }
+
+  console.debug('text to insert: "%s"', textToInsert.replace(/\n/, '\\n'));
 
   return <eslint.Rule.ReportDescriptor>{
     node: context.node,
