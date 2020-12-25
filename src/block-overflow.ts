@@ -10,60 +10,55 @@ export function checkBlockOverflow(context: CommentContext, line: CommentLine) {
   // enter into markdown fence when not in jsdoc example. We can only enter into jsdoc example when
   // not in markdown fence.
 
-  // TODO: is it only correct to check for markdown when in a javadoc-style comment?
-
-  if (context.in_markdown_fence) {
+  if (context.in_md_fence) {
     if (line.index > context.comment.loc.start.line && line.content.startsWith('```')) {
-      context.in_markdown_fence = false;
-      // never detect overflow on the line exiting from markdown fence
+      context.in_md_fence = false;
       return;
     } else {
-      // never detect overflow while in markdown fence
       return;
     }
   } else if (context.in_jsdoc_example) {
     if (line.content.startsWith('@')) {
       if (line.content.startsWith('@example')) {
-        // never detect overflow if there is a subsequent example
         return;
       } else {
         context.in_jsdoc_example = false;
-        // do not return, we are no longer in an example
       }
     } else {
-      // never detect overflow while in jsdoc example
       return;
     }
   } else if (line.index > context.comment.loc.start.line && line.content.startsWith('```')) {
-    context.in_markdown_fence = true;
-    // never detect overflow on the line entering markdown fence
+    context.in_md_fence = true;
     return;
-  } else if (line.index > context.comment.loc.start.line &&
-    line.content.startsWith('@example')) {
+  } else if (line.index > context.comment.loc.start.line && line.content.startsWith('@example')) {
     context.in_jsdoc_example = true;
-    // never detect overflow on the line entering jsdoc example
     return;
   }
 
   // If the text of the line, less its line break characters, is less than the threshold then the
-  // line does not overflow.  Keep in mind that this counts tab characters as a single character.
+  // line does not overflow. Keep in mind that this counts tab characters as a single character.
   // Also keep in mind that the authors may not be making use of the no-trailing-space rule, so
   // there may be a bunch of garbage whitespace at the end. So this check here isn't telling us that
   // the line requires adjustment. It is only ruling out the case where it does not need adjustment
-  // even with a bunch of trailing whitespace. We have to wait to do this check until after the
-  // preformat check, otherwise we never get around to detecting when we exit or enter the step?
+  // even with a bunch of trailing whitespace.
 
   if (line.text.length <= context.max_line_length) {
     return;
   }
 
-  const lengthOfWhiteSpacePrecedingComment = line.text.length - line.text_trimmed_start.length;
+  // If the text of the line, less the leading whitespace preceding the text, is more than the
+  // threshold, then we refuse to analyze the line, because it is unclear how to wrap.
 
-  if (lengthOfWhiteSpacePrecedingComment >= context.max_line_length) {
+  if (line.text.length - line.text_trimmed_start.length >= context.max_line_length) {
     return;
   }
 
-  if (lengthOfWhiteSpacePrecedingComment + line.prefix.length >= context.max_line_length) {
+  // Similarly, if the text of the line, less the leading whitespace, combined with the prefix, then
+  // we have a javadoc-like comment that only starts after the threshold, so we refuse to analyze
+  // the line, because it is unclear how to wrap.
+
+  if (line.text.length - line.text_trimmed_start.length + line.prefix.length >=
+    context.max_line_length) {
     return;
   }
 
@@ -123,43 +118,43 @@ export function checkBlockOverflow(context: CommentContext, line: CommentLine) {
 
   // To avoid considering trailing whitespace, trim the end of the content.
 
-  const contentTrimmedEnd = line.content.trimEnd();
-
   // Now that we trimmed the end of the content, we want to again check for whether we actually
-  // overflow. The previous check counted trailing whitespace characters. This check does not.
+  // overflow. The previous check counted trailing whitespace characters. This check does not. For
+  // this check, if the line is the last line, then we add back in the trailing whitespace and the
+  // comment's ending star slash. For all other lines the suffix is empty.
 
-  if ((lengthOfWhiteSpacePrecedingComment + line.prefix.length + contentTrimmedEnd.length) <=
-    context.max_line_length) {
+  if (line.text.length - line.text_trimmed_start.length + line.prefix.length +
+    line.content_trimmed.length + line.suffix.length <= context.max_line_length) {
     return;
   }
 
   // In order to search for the string, first we have to determine the scope of the search. We do
   // not want to be searching for spaces that occur after the threshold.
 
-  const haystackEnd = context.max_line_length - lengthOfWhiteSpacePrecedingComment -
+  const haystackEnd = context.max_line_length - line.text.length - line.text_trimmed_start.length -
     line.prefix.length - subPrefix.length;
 
   // We have to take into account the length of the sub prefix so that we do not match spaces in the
   // sub prefix.
 
-  let haystack = contentTrimmedEnd;
+  let haystack = line.content_trimmed;
   if (subPrefix.length) {
-    haystack = contentTrimmedEnd.slice(subPrefix.length);
+    haystack = line.content_trimmed.slice(subPrefix.length);
   }
 
   // Find the last character of the last sequence of whitespace characters in the content substring.
   // Keep in mind this is not the position in the line.
 
-  const contentBreakingSpaceSequenceEndPosition = haystack.lastIndexOf(' ', haystackEnd);
+  const breakingSpaceSequenceEndPosition = haystack.lastIndexOf(' ', haystackEnd);
 
   // We have to consider that we match have matched the last space in a sequence of spaces. Compute
   // the position of the first space in that sequence. It is the same position as the end space when
   // there is only one space.
 
-  let contentBreakingSpaceSequenceStartPosition = contentBreakingSpaceSequenceEndPosition;
-  if (contentBreakingSpaceSequenceStartPosition > -1) {
-    while (contentTrimmedEnd.charAt(contentBreakingSpaceSequenceStartPosition - 1) === ' ') {
-      contentBreakingSpaceSequenceStartPosition--;
+  let breakingSpaceSequenceStartPosition = breakingSpaceSequenceEndPosition;
+  if (breakingSpaceSequenceStartPosition > -1) {
+    while (line.content_trimmed.charAt(breakingSpaceSequenceStartPosition - 1) === ' ') {
+      breakingSpaceSequenceStartPosition--;
     }
   }
 
@@ -168,9 +163,9 @@ export function checkBlockOverflow(context: CommentContext, line: CommentLine) {
   // a space found at 0, that should never happen because that space should belong to the prefix.
 
   let lineBreakPosition = -1;
-  if (contentBreakingSpaceSequenceStartPosition > 0) {
-    lineBreakPosition = lengthOfWhiteSpacePrecedingComment + line.prefix.length +
-      subPrefix.length + contentBreakingSpaceSequenceStartPosition;
+  if (breakingSpaceSequenceStartPosition > 0) {
+    lineBreakPosition = line.text.length - line.text_trimmed_start.length + line.prefix.length +
+      subPrefix.length + breakingSpaceSequenceStartPosition;
   } else {
     lineBreakPosition = context.max_line_length;
   }
@@ -205,15 +200,16 @@ export function checkBlockOverflow(context: CommentContext, line: CommentLine) {
   let textToInsert = '\n';
 
   if (line.index === context.comment.loc.start.line) {
-    textToInsert += line.text.slice(0, lengthOfWhiteSpacePrecedingComment);
+    textToInsert += line.text.slice(0, line.text.length - line.text_trimmed_start.length);
     if (line.prefix.startsWith('/**')) {
       textToInsert += ' *';
-      if (contentBreakingSpaceSequenceStartPosition === -1) {
+      if (breakingSpaceSequenceStartPosition === -1) {
         textToInsert += ' ';
       }
     }
   } else {
-    textToInsert += line.text.slice(0, lengthOfWhiteSpacePrecedingComment + line.prefix.length);
+    textToInsert += line.text.slice(0, line.text.length - line.text_trimmed_start.length +
+      line.prefix.length);
   }
 
   if (subPrefix.length > 0) {

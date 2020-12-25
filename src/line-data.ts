@@ -39,6 +39,13 @@ export interface CommentLine {
    * The value of comment but also right trimmed (so fully trimmed).
    */
   content_trimmed: string;
+
+  /**
+   * On any line other than the last line of the comment, this is an empty string. On the last line
+   * of the comment, this is all of the whitespace following the content and the final star slash.
+   * This does not include any characters after the final star slash.
+   */
+  suffix: string;
 }
 
 export function parseLine(code: eslint.SourceCode, comment: estree.Comment, line: number) {
@@ -76,6 +83,15 @@ export function parseLine(code: eslint.SourceCode, comment: estree.Comment, line
   }
 
   output.content_trimmed = output.content.trimEnd();
+
+  if (line === comment.loc.end.line) {
+    output.suffix = output.text.slice(output.text.length - output.text_trimmed_start.length +
+      output.prefix.length + output.content_trimmed.length, comment.loc.end.column);
+  } else {
+    output.suffix = '';
+  }
+
+  console.debug(output);
 
   return output;
 }

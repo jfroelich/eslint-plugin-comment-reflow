@@ -15,7 +15,7 @@ export function checkBlockUnderflow(context: CommentContext, line: CommentLine) 
   // Check if we are transitioning into a preformatted section or out of one. The block overflow
   // function manages the state transition. We just need to know to ignore.
 
-  if (context.in_markdown_fence || context.in_jsdoc_example) {
+  if (context.in_md_fence || context.in_jsdoc_example) {
     return;
   }
 

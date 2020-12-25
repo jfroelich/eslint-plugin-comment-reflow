@@ -21,7 +21,7 @@ export function checkBlockComment(context: CommentContext) {
     return;
   }
 
-  context.in_markdown_fence = false;
+  context.in_md_fence = false;
   context.in_jsdoc_example = false;
 
   for (let loc = context.comment.loc, line = loc.start.line; line <= loc.end.line; line++) {
