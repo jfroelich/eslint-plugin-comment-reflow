@@ -4,17 +4,14 @@ import { CommentContext } from './comment-context';
 import { parseLine } from './line-data';
 
 /**
- * Generate a fix for a block comment. This will only generate one fix when there are multiple
- * linting errors because ESLint reevaluates after each fix. Returns undefined if no error is found.
+ * Generate a fix for the first error found in block comment.
  */
 export function checkBlockComment(context: CommentContext) {
   if (context.comment.type !== 'Block') {
     return;
   }
 
-  // Do not analyze block comments that are not the first token on the line of the start of the
-  // comment. A token can span multiple lines so we are looking for any token that ends on the same
-  // line that the comment token starts, regardless of where the previous token started.
+  // Ignore comments that are not the first token on the line.
 
   const previousToken = context.code.getTokenBefore(context.comment, { includeComments: true });
   if (previousToken && previousToken.loc.end.line === context.comment.loc.start.line) {
