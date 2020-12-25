@@ -1,9 +1,9 @@
 import assert from 'assert';
 import eslint from 'eslint';
 import estree from 'estree';
-import { createBlockCommentReport } from './block-comment';
+import { checkBlockComment } from './block-comment';
 import { CommentContext } from './comment-context';
-import { createLineCommentReport } from './line-comment';
+import { checkLineComment } from './line-comment';
 
 export const commentLengthRule: eslint.Rule.RuleModule = {
   meta: {
@@ -45,12 +45,12 @@ function analyzeProgram(context: eslint.Rule.RuleContext, node: estree.Node) {
       comment_index: index
     };
 
-    let report = createBlockCommentReport(commentContext);
+    let report = checkBlockComment(commentContext);
     if (report) {
       return context.report(report);
     }
 
-    report = createLineCommentReport(commentContext);
+    report = checkLineComment(commentContext);
     if (report) {
       return context.report(report);
     }

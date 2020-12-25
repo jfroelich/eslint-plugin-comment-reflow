@@ -1,7 +1,8 @@
 import type eslint from 'eslint';
 import { CommentContext } from './comment-context';
+import { CommentLine } from './line-data';
 
-export function createBlockCommentLineOverflowReport(context: CommentContext) {
+export function createBlockCommentLineOverflowReport(context: CommentContext, line: CommentLine) {
   // Before doing any more decision making, we have to start with considering the special case of
   // preformatted content, such as when using triple tilde markdown or the @example jsdoc tag. When
   // in a preformatted section of the content, we respect the author's formatting and bail. First we
@@ -12,7 +13,7 @@ export function createBlockCommentLineOverflowReport(context: CommentContext) {
   // TODO: is it only correct to check for markdown when in a javadoc-style comment?
 
   if (context.in_markdown_fence) {
-    if (context.line > context.comment.loc.start.line && context.line_content.startsWith('```')) {
+    if (line.index > context.comment.loc.start.line && line.content.startsWith('```')) {
       context.in_markdown_fence = false;
       // never detect overflow on the line exiting from markdown fence
       return;
@@ -21,8 +22,8 @@ export function createBlockCommentLineOverflowReport(context: CommentContext) {
       return;
     }
   } else if (context.in_jsdoc_example) {
-    if (context.line_content.startsWith('@')) {
-      if (context.line_content.startsWith('@example')) {
+    if (line.content.startsWith('@')) {
+      if (line.content.startsWith('@example')) {
         // never detect overflow if there is a subsequent example
         return;
       } else {
@@ -33,13 +34,12 @@ export function createBlockCommentLineOverflowReport(context: CommentContext) {
       // never detect overflow while in jsdoc example
       return;
     }
-  } else if (context.line > context.comment.loc.start.line &&
-    context.line_content.startsWith('```')) {
+  } else if (line.index > context.comment.loc.start.line && line.content.startsWith('```')) {
     context.in_markdown_fence = true;
     // never detect overflow on the line entering markdown fence
     return;
-  } else if (context.line > context.comment.loc.start.line &&
-    context.line_content.startsWith('@example')) {
+  } else if (line.index > context.comment.loc.start.line &&
+    line.content.startsWith('@example')) {
     context.in_jsdoc_example = true;
     // never detect overflow on the line entering jsdoc example
     return;
@@ -53,18 +53,17 @@ export function createBlockCommentLineOverflowReport(context: CommentContext) {
   // even with a bunch of trailing whitespace. We have to wait to do this check until after the
   // preformat check, otherwise we never get around to detecting when we exit or enter the step?
 
-  if (context.line_text.length <= context.max_line_length) {
+  if (line.text.length <= context.max_line_length) {
     return;
   }
 
-  const lengthOfWhiteSpacePrecedingComment = context.line_text.length -
-    context.line_text_trimmed_start.length;
+  const lengthOfWhiteSpacePrecedingComment = line.text.length - line.text_trimmed_start.length;
 
   if (lengthOfWhiteSpacePrecedingComment >= context.max_line_length) {
     return;
   }
 
-  if (lengthOfWhiteSpacePrecedingComment + context.line_prefix.length >= context.max_line_length) {
+  if (lengthOfWhiteSpacePrecedingComment + line.prefix.length >= context.max_line_length) {
     return;
   }
 
@@ -73,8 +72,8 @@ export function createBlockCommentLineOverflowReport(context: CommentContext) {
   // comment, we want to check if we are on the first line of the comment. We tolerate leading
   // whitespace before the comment.
 
-  if (context.line === context.comment.loc.start.line && !context.line_prefix.startsWith('/**') &&
-    context.line_content.startsWith('tslint:')) {
+  if (line.index === context.comment.loc.start.line && !line.prefix.startsWith('/**') &&
+    line.content.startsWith('tslint:')) {
     return;
   }
 
@@ -82,7 +81,7 @@ export function createBlockCommentLineOverflowReport(context: CommentContext) {
   // do not want to split such hyperlinks. I'd rather not parse urls here and pay for all that
   // overhead to be able to wrap @see lines so just exit.
 
-  if (context.line_content.startsWith('@see')) {
+  if (line.content.startsWith('@see')) {
     return;
   }
 
@@ -108,7 +107,7 @@ export function createBlockCommentLineOverflowReport(context: CommentContext) {
   // least one space following the punctuation. We use a + instead of matching exactly one space so
   // that we can tolerate any number of spaces at the start of the list.
 
-  const listMatches = /^([*-]|\d+\.)\s+/.exec(context.line_content);
+  const listMatches = /^([*-]|\d+\.)\s+/.exec(line.content);
   if (listMatches && listMatches.length > 0) {
     subPrefix = listMatches[0];
   }
@@ -124,13 +123,13 @@ export function createBlockCommentLineOverflowReport(context: CommentContext) {
 
   // To avoid considering trailing whitespace, trim the end of the content.
 
-  const contentTrimmedEnd = context.line_content.trimEnd();
+  const contentTrimmedEnd = line.content.trimEnd();
 
   // Now that we trimmed the end of the content, we want to again check for whether we actually
   // overflow. The previous check counted trailing whitespace characters. This check does not.
 
-  if ((lengthOfWhiteSpacePrecedingComment + context.line_prefix.length +
-    contentTrimmedEnd.length) <= context.max_line_length) {
+  if ((lengthOfWhiteSpacePrecedingComment + line.prefix.length + contentTrimmedEnd.length) <=
+    context.max_line_length) {
     return;
   }
 
@@ -138,7 +137,7 @@ export function createBlockCommentLineOverflowReport(context: CommentContext) {
   // not want to be searching for spaces that occur after the threshold.
 
   const haystackEnd = context.max_line_length - lengthOfWhiteSpacePrecedingComment -
-    context.line_prefix.length - subPrefix.length;
+    line.prefix.length - subPrefix.length;
 
   // We have to take into account the length of the sub prefix so that we do not match spaces in the
   // sub prefix.
@@ -170,7 +169,7 @@ export function createBlockCommentLineOverflowReport(context: CommentContext) {
 
   let lineBreakPosition = -1;
   if (contentBreakingSpaceSequenceStartPosition > 0) {
-    lineBreakPosition = lengthOfWhiteSpacePrecedingComment + context.line_prefix.length +
+    lineBreakPosition = lengthOfWhiteSpacePrecedingComment + line.prefix.length +
       subPrefix.length + contentBreakingSpaceSequenceStartPosition;
   } else {
     lineBreakPosition = context.max_line_length;
@@ -185,7 +184,7 @@ export function createBlockCommentLineOverflowReport(context: CommentContext) {
   // easy access to the line breaks in use. The API call here is better because it properly accounts
   // for line breaks in the same way as the rest of ESLint.
 
-  const lineStartIndex = context.code.getIndexFromLoc({ line: context.line, column: 0 });
+  const lineStartIndex = context.code.getIndexFromLoc({ line: line.index, column: 0 });
 
   // Compute the range of the text after which we will insert some new text. This range is relative
   // to the entire file.
@@ -205,17 +204,16 @@ export function createBlockCommentLineOverflowReport(context: CommentContext) {
 
   let textToInsert = '\n';
 
-  if (context.line === context.comment.loc.start.line) {
-    textToInsert += context.line_text.slice(0, lengthOfWhiteSpacePrecedingComment);
-    if (context.line_prefix.startsWith('/**')) {
+  if (line.index === context.comment.loc.start.line) {
+    textToInsert += line.text.slice(0, lengthOfWhiteSpacePrecedingComment);
+    if (line.prefix.startsWith('/**')) {
       textToInsert += ' *';
       if (contentBreakingSpaceSequenceStartPosition === -1) {
         textToInsert += ' ';
       }
     }
   } else {
-    textToInsert += context.line_text.slice(0, lengthOfWhiteSpacePrecedingComment +
-      context.line_prefix.length);
+    textToInsert += line.text.slice(0, lengthOfWhiteSpacePrecedingComment + line.prefix.length);
   }
 
   if (subPrefix.length > 0) {
@@ -229,7 +227,7 @@ export function createBlockCommentLineOverflowReport(context: CommentContext) {
     loc: context.comment.loc,
     messageId: 'overflow',
     data: {
-      line_length: `${context.line_text.length}`,
+      line_length: `${line.text.length}`,
       max_length: `${context.max_line_length}`
     },
     fix: function (fixer) {

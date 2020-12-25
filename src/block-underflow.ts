@@ -1,7 +1,8 @@
 import eslint from 'eslint';
 import { CommentContext } from './comment-context';
+import { CommentLine } from './line-data';
 
-export function createBlockCommentLineUnderflowReport(context: CommentContext) {
+export function createBlockCommentLineUnderflowReport(context: CommentContext, line: CommentLine) {
   // Grab the text of the current line. Since the line number is 1-based, but the lines array is
   // 0-based, we must substract one. Do not confuse the value of the line with the comment's value.
   // Also, it looks like ESLint splits by line break to generate the lines array so each line does
@@ -9,7 +10,7 @@ export function createBlockCommentLineUnderflowReport(context: CommentContext) {
   // actual length. In the case of a block comment, ESLint does not remove leading asterisks, which
   // is different behavior than single line comments, so also watch out for that.
 
-  const text = context.code.lines[context.line - 1];
+  const text = line.text;
 
   // Check if we are transitioning into a preformatted section or out of one. The block overflow
   // function manages the state transition. We just need to know to ignore.
@@ -22,7 +23,7 @@ export function createBlockCommentLineUnderflowReport(context: CommentContext) {
   // current line is the final line of the comment then there is no subsequent line and so the
   // current line cannot underflow.
 
-  if (context.line === context.comment.loc.end.line) {
+  if (line.index === context.comment.loc.end.line) {
     return;
   }
 
@@ -32,7 +33,7 @@ export function createBlockCommentLineUnderflowReport(context: CommentContext) {
   const textTrimmedStart = text.trimStart();
 
   let prefix = '';
-  if (context.line === context.comment.loc.start.line) {
+  if (line.index === context.comment.loc.start.line) {
     const matches = /\/\*\*?\s*/.exec(textTrimmedStart);
     if (matches && matches.length === 1) {
       prefix = matches[0];
@@ -45,7 +46,7 @@ export function createBlockCommentLineUnderflowReport(context: CommentContext) {
   }
 
   let content = '';
-  if (context.line === context.comment.loc.end.line) {
+  if (line.index === context.comment.loc.end.line) {
     content = textTrimmedStart.slice(prefix.length, -2);
   } else {
     content = textTrimmedStart.slice(prefix.length);
@@ -61,7 +62,7 @@ export function createBlockCommentLineUnderflowReport(context: CommentContext) {
   if ((lengthOfWhiteSpacePrecedingComment + prefix.length + contentTrimmedEnd.length) >=
     context.max_line_length) {
     console.debug('trimmed content is greater than or equal to max line length, not underflow',
-      context.line, lengthOfWhiteSpacePrecedingComment + prefix.length + contentTrimmedEnd.length);
+      line, lengthOfWhiteSpacePrecedingComment + prefix.length + contentTrimmedEnd.length);
     return;
   }
 
@@ -91,7 +92,7 @@ export function createBlockCommentLineUnderflowReport(context: CommentContext) {
   // asterisk and the directive word. In this case the directive itself should not be deemed to
   // underflow.
 
-  if (context.line === 1 && /^\/\*(global|jslint|property)/.test(text)) {
+  if (line.index === 1 && /^\/\*(global|jslint|property)/.test(text)) {
     return;
   }
 
@@ -103,7 +104,7 @@ export function createBlockCommentLineUnderflowReport(context: CommentContext) {
 
   // Get the value of the next line. line is 1-based, so the next line is simply at "line".
 
-  let next = context.code.lines[context.line];
+  let next = context.code.lines[line.index];
   next = next.trim();
 
   // Underflow can only occur if the next line has some content that we would want to merge into the
@@ -197,8 +198,8 @@ export function createBlockCommentLineUnderflowReport(context: CommentContext) {
   // of the line break (which might be wrong right now).
 
   let lineRangeStart = context.comment.range[0];
-  for (let line = context.comment.loc.start.line; line < context.line; line++) {
-    lineRangeStart += context.code.lines[line - 1].length + 1;
+  for (let lineCursor = context.comment.loc.start.line; lineCursor < line.index; lineCursor++) {
+    lineRangeStart += context.code.lines[lineCursor - 1].length + 1;
   }
 
   const report: eslint.Rule.ReportDescriptor = {
@@ -212,9 +213,9 @@ export function createBlockCommentLineUnderflowReport(context: CommentContext) {
     fix: function (fixer) {
       const adjustment = edge === -1 ? 2 : 3;
       const range: eslint.AST.Range = [
-        lineRangeStart + context.code.lines[context.line - 1].length,
-        lineRangeStart + context.code.lines[context.line - 1].length + 1 +
-          context.code.lines[context.line].indexOf('*') + adjustment
+        lineRangeStart + context.code.lines[line.index - 1].length,
+        lineRangeStart + context.code.lines[line.index - 1].length + 1 +
+          context.code.lines[line.index].indexOf('*') + adjustment
       ];
 
       return fixer.replaceTextRange(range, ' ');

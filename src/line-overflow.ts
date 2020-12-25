@@ -1,15 +1,17 @@
 import eslint from 'eslint';
 import { CommentContext } from './comment-context';
+import { CommentLine } from './line-data';
 
-export function createLineCommentLineOverflowReport(context: CommentContext) {
-  const text = context.code.lines[context.line - 1];
+export function createLineCommentLineOverflowReport(context: CommentContext, line: CommentLine) {
+  const text = line.text;
+
   if (text.length <= context.max_line_length) {
     return;
   }
 
   // if there is a comment directive then never overflow
 
-  const content = text.trimStart().slice(2).trimStart();
+  const content = line.content;
   if (content.startsWith('eslint-')) {
     return;
   }

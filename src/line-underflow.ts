@@ -1,12 +1,13 @@
 import assert from 'assert';
 import eslint from 'eslint';
 import { CommentContext } from './comment-context';
+import { CommentLine } from './line-data';
 
-export function createLineCommentLineUnderflowReport(context: CommentContext) {
+export function createLineCommentLineUnderflowReport(context: CommentContext, line: CommentLine) {
   // Get the text of the line. Do not confuse this with comment value. line is 1 based so we
   // subtract 1 to get the line in the lines array.
 
-  const text = context.code.lines[context.line - 1];
+  const text = line.text;
 
   // The comment line only underflows when it is less than the maximum line length.
 
@@ -16,11 +17,13 @@ export function createLineCommentLineUnderflowReport(context: CommentContext) {
 
   // We must consider that eslint stripped out the line break from the text. Therefore, if we count
   // the line break character itself, and we are right at the threshold, this is not underflow.
+
   if (text.length + 1 === context.max_line_length) {
     return;
   }
 
   // For a single line comment line to underflow, it cannot be the final comment in the file.
+
   const comments = context.code.getAllComments();
   if (context.comment_index + 1 === comments.length) {
     return;
@@ -37,7 +40,7 @@ export function createLineCommentLineUnderflowReport(context: CommentContext) {
   // If the current single line comment is an eslint pragma kind of comment then never consider it
   // to underflow.
 
-  const content = trimmedText.slice(2).trimStart();
+  const content = line.content;
 
   if (content.startsWith('eslint-')) {
     return;
@@ -76,13 +79,13 @@ export function createLineCommentLineUnderflowReport(context: CommentContext) {
   // considered adjacent if the difference between the current line number and the next comment's
   // line number is 1. We could use comment.loc.end.line or line here.
 
-  if (next.loc.start.line - context.line !== 1) {
+  if (next.loc.start.line - line.index !== 1) {
     return;
   }
 
   // Get the text of the next comment line. Line is offset-1, so we just get the text at line.
 
-  const nextCommentLineText = context.code.lines[context.line];
+  const nextCommentLineText = context.code.lines[line.index];
 
   // Find where the comment starts. We cannot assume the comment is at the start of the line as it
   // could be a trailing comment. We search from the left because we want the first set of slashes,
@@ -193,9 +196,9 @@ export function createLineCommentLineUnderflowReport(context: CommentContext) {
       const adjustment = edge === -1 ? 2 : 3;
       const range: eslint.AST.Range = [
         // TODO: this feels wrong, this assumes comment starts at start of line?
-        context.comment.range[0] + context.code.lines[context.line - 1].length,
-        context.comment.range[0] + context.code.lines[context.line - 1].length + 1 +
-          context.code.lines[context.line].indexOf('//') + adjustment
+        context.comment.range[0] + context.code.lines[line.index - 1].length,
+        context.comment.range[0] + context.code.lines[line.index - 1].length + 1 +
+          context.code.lines[line.index].indexOf('//') + adjustment
       ];
 
       return fixer.replaceTextRange(range, ' ');
