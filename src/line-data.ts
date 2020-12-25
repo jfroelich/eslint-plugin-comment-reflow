@@ -41,9 +41,6 @@ export interface CommentLine {
   content_trimmed: string;
 }
 
-/**
- * @todo probably can reuse for single line, should parse either based on comment type
- */
 export function parseLine(code: eslint.SourceCode, comment: estree.Comment, line: number) {
   const output = <CommentLine>{};
   output.index = line;
@@ -53,6 +50,11 @@ export function parseLine(code: eslint.SourceCode, comment: estree.Comment, line
   output.prefix = '';
   if (comment.type === 'Block') {
     if (line === comment.loc.start.line) {
+      // TODO: if we are on the first line, we know the start of the comment from the location,
+      // and only need to search a couple trailing characters, we should probably start from the
+      // start of the comment so that it is more efficient? E.g. skip the slash and first start and
+      // regex the next star and space(s).
+
       const matches = /^\/\*\*?\s*/.exec(output.text_trimmed_start);
       if (matches && matches.length === 1) {
         output.prefix = matches[0];
@@ -64,7 +66,11 @@ export function parseLine(code: eslint.SourceCode, comment: estree.Comment, line
       }
     }
   } else if (comment.type === 'Line') {
-    // TODO: implement me
+    const afterSlashesText = output.text.slice(comment.loc.start.column + 2);
+    const textTrimmedStart = afterSlashesText.trimStart();
+    const leadingSpaceCount = afterSlashesText.length - textTrimmedStart.length;
+    output.prefix = output.text.slice(comment.loc.start.column,
+      comment.loc.start.column + 2 +  leadingSpaceCount);
   }
 
   output.content = '';
