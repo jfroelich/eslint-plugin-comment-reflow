@@ -1,5 +1,5 @@
-import { createBlockCommentLineOverflowReport } from './block-overflow';
-import { createBlockCommentLineUnderflowReport } from './block-underflow';
+import { checkBlockOverflow } from './block-overflow';
+import { checkBlockUnderflow } from './block-underflow';
 import { CommentContext } from './comment-context';
 import { parseLine } from './line-data';
 
@@ -27,12 +27,12 @@ export function checkBlockComment(context: CommentContext) {
   for (let loc = context.comment.loc, line = loc.start.line; line <= loc.end.line; line++) {
     const commentLine = parseLine(context.code, context.comment, line);
 
-    let report = createBlockCommentLineOverflowReport(context, commentLine);
+    let report = checkBlockOverflow(context, commentLine);
     if (report) {
       return report;
     }
 
-    report = createBlockCommentLineUnderflowReport(context, commentLine);
+    report = checkBlockUnderflow(context, commentLine);
     if (report) {
       return report;
     }

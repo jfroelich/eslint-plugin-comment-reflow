@@ -1,11 +1,8 @@
 import { CommentContext } from './comment-context';
 import { parseLine } from './line-data';
-import { createLineCommentLineOverflowReport } from './line-overflow';
-import { createLineCommentLineUnderflowReport } from './line-underflow';
+import { checkLineOverflow } from './line-overflow';
+import { checkLineUnderflow } from './line-underflow';
 
-/**
- * Generate a fix for single line comment
- */
 export function checkLineComment(context: CommentContext) {
   if (context.comment.type !== 'Line') {
     return;
@@ -13,10 +10,10 @@ export function checkLineComment(context: CommentContext) {
 
   const line = parseLine(context.code, context.comment, context.comment.loc.start.line);
 
-  const report = createLineCommentLineOverflowReport(context, line);
+  const report = checkLineOverflow(context, line);
   if (report) {
     return report;
   }
 
-  return createLineCommentLineUnderflowReport(context, line);
+  return checkLineUnderflow(context, line);
 }

@@ -34,6 +34,11 @@ export interface CommentLine {
    * of the content. The content is left trimmed but is not right trimmed.
    */
   content: string;
+
+  /**
+   * The value of comment but also right trimmed (so fully trimmed).
+   */
+  content_trimmed: string;
 }
 
 /**
@@ -68,6 +73,8 @@ export function parseLine(code: eslint.SourceCode, comment: estree.Comment, line
   } else {
     output.content = output.text_trimmed_start.slice(output.prefix.length);
   }
+
+  output.content_trimmed = output.content.trimEnd();
 
   return output;
 }

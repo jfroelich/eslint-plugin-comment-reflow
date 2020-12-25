@@ -2,7 +2,7 @@ import eslint from 'eslint';
 import { CommentContext } from './comment-context';
 import { CommentLine } from './line-data';
 
-export function createBlockCommentLineUnderflowReport(context: CommentContext, line: CommentLine) {
+export function checkBlockUnderflow(context: CommentContext, line: CommentLine) {
   // Grab the text of the current line. Since the line number is 1-based, but the lines array is
   // 0-based, we must substract one. Do not confuse the value of the line with the comment's value.
   // Also, it looks like ESLint splits by line break to generate the lines array so each line does

@@ -2,7 +2,7 @@ import type eslint from 'eslint';
 import { CommentContext } from './comment-context';
 import { CommentLine } from './line-data';
 
-export function createBlockCommentLineOverflowReport(context: CommentContext, line: CommentLine) {
+export function checkBlockOverflow(context: CommentContext, line: CommentLine) {
   // Before doing any more decision making, we have to start with considering the special case of
   // preformatted content, such as when using triple tilde markdown or the @example jsdoc tag. When
   // in a preformatted section of the content, we respect the author's formatting and bail. First we
