@@ -2,61 +2,6 @@ import type eslint from 'eslint';
 import { CommentContext } from './comment-context';
 
 export function createBlockCommentLineOverflowReport(context: CommentContext) {
-  // Get the text of the current line. The line is 1-based but the index of the line in the lines
-  // array is 0 based. The text does not include line break characters because of how ESLint parses
-  // the lines. The text may include characters that are not a part of the comment because the lines
-  // array is computed separately from the comments array. The text includes the comment syntax like
-  // the forward slashes. We assume that the caller checked that the comment is the first token on
-  // the line where the comment starts, so here we know that any text preceding the start of the
-  // comment on the line is only whitespace.
-
-  const text = context.code.lines[context.line - 1];
-
-  // Determine the amount of whitespace preceding the comment on the current line. We do this so
-  // that we can figure out where the content of the comment actually starts. We need to consider
-  // the leading whitespace for several reasons. We can use the indent level combined with the line
-  // start index to find the starting position of the comment's content. One particular reason is
-  // that we need to limit the search space when deciding where to break the line, because if we
-  // search for a word break backwards from the end of the line we can erroneously match the
-  // whitespace preceding the content. In determining the indent, keep in mind that we already
-  // verified that there is no preceding token on the same line if we are on the first line of the
-  // comment. The driving principle is that we use the amount of preceding whitespace of the current
-  // line to determine the appropriate amount of preceding whitespace to specify for the new line
-  // that we plan to introduce. We do not try to maintain the indent relative to only the first line
-  // of the comment because this way we can uniformly handle lines that have varying indentation.
-
-  const textTrimmedStart = text.trimStart();
-
-  // Next, compute the start of the content within the comment line by determining the length of the
-  // "prefix". The length may be zero. For the first line, we have to consider the slash, star or
-  // stars, and subsequent whitespace. For other lines, we have to consider the star and or
-  // subsequent whitespace.
-
-  let prefix = '';
-  if (context.line === context.comment.loc.start.line) {
-    const matches = /\/\*\*?\s*/.exec(textTrimmedStart);
-    if (matches && matches.length === 1) {
-      prefix = matches[0];
-    }
-  } else {
-    const matches = /\*\s*/.exec(textTrimmedStart);
-    if (matches && matches.length === 1) {
-      prefix = matches[0];
-    }
-  }
-
-  // Determine the content of the line of the comment, which is the text excluding comment syntax,
-  // indentation, and prefix. In doing so, we have to watch out for the final line of the comment
-  // that has the closing asterisk and slash. Keep in mind that while the whitespace preceding the
-  // content here has was excluded, we have not yet excluded the whitespace after the content.
-
-  let content = '';
-  if (context.line === context.comment.loc.end.line) {
-    content = textTrimmedStart.slice(prefix.length, -2);
-  } else {
-    content = textTrimmedStart.slice(prefix.length);
-  }
-
   // Before doing any more decision making, we have to start with considering the special case of
   // preformatted content, such as when using triple tilde markdown or the @example jsdoc tag. When
   // in a preformatted section of the content, we respect the author's formatting and bail. First we
@@ -67,7 +12,7 @@ export function createBlockCommentLineOverflowReport(context: CommentContext) {
   // TODO: is it only correct to check for markdown when in a javadoc-style comment?
 
   if (context.in_markdown_fence) {
-    if (context.line > context.comment.loc.start.line && content.startsWith('```')) {
+    if (context.line > context.comment.loc.start.line && context.line_content.startsWith('```')) {
       context.in_markdown_fence = false;
       // never detect overflow on the line exiting from markdown fence
       return;
@@ -76,8 +21,8 @@ export function createBlockCommentLineOverflowReport(context: CommentContext) {
       return;
     }
   } else if (context.in_jsdoc_example) {
-    if (content.startsWith('@')) {
-      if (content.startsWith('@example')) {
+    if (context.line_content.startsWith('@')) {
+      if (context.line_content.startsWith('@example')) {
         // never detect overflow if there is a subsequent example
         return;
       } else {
@@ -88,11 +33,13 @@ export function createBlockCommentLineOverflowReport(context: CommentContext) {
       // never detect overflow while in jsdoc example
       return;
     }
-  } else if (context.line > context.comment.loc.start.line && content.startsWith('```')) {
+  } else if (context.line > context.comment.loc.start.line &&
+    context.line_content.startsWith('```')) {
     context.in_markdown_fence = true;
     // never detect overflow on the line entering markdown fence
     return;
-  } else if (context.line > context.comment.loc.start.line && content.startsWith('@example')) {
+  } else if (context.line > context.comment.loc.start.line &&
+    context.line_content.startsWith('@example')) {
     context.in_jsdoc_example = true;
     // never detect overflow on the line entering jsdoc example
     return;
@@ -106,17 +53,18 @@ export function createBlockCommentLineOverflowReport(context: CommentContext) {
   // even with a bunch of trailing whitespace. We have to wait to do this check until after the
   // preformat check, otherwise we never get around to detecting when we exit or enter the step?
 
-  if (text.length <= context.max_line_length) {
+  if (context.line_text.length <= context.max_line_length) {
     return;
   }
 
-  const lengthOfWhiteSpacePrecedingComment = text.length - textTrimmedStart.length;
+  const lengthOfWhiteSpacePrecedingComment = context.line_text.length -
+    context.line_text_trimmed_start.length;
 
   if (lengthOfWhiteSpacePrecedingComment >= context.max_line_length) {
     return;
   }
 
-  if (lengthOfWhiteSpacePrecedingComment + prefix.length >= context.max_line_length) {
+  if (lengthOfWhiteSpacePrecedingComment + context.line_prefix.length >= context.max_line_length) {
     return;
   }
 
@@ -125,8 +73,8 @@ export function createBlockCommentLineOverflowReport(context: CommentContext) {
   // comment, we want to check if we are on the first line of the comment. We tolerate leading
   // whitespace before the comment.
 
-  if (context.line === context.comment.loc.start.line && !prefix.startsWith('/**') &&
-    content.startsWith('tslint:')) {
+  if (context.line === context.comment.loc.start.line && !context.line_prefix.startsWith('/**') &&
+    context.line_content.startsWith('tslint:')) {
     return;
   }
 
@@ -134,7 +82,7 @@ export function createBlockCommentLineOverflowReport(context: CommentContext) {
   // do not want to split such hyperlinks. I'd rather not parse urls here and pay for all that
   // overhead to be able to wrap @see lines so just exit.
 
-  if (content.startsWith('@see')) {
+  if (context.line_content.startsWith('@see')) {
     return;
   }
 
@@ -160,7 +108,7 @@ export function createBlockCommentLineOverflowReport(context: CommentContext) {
   // least one space following the punctuation. We use a + instead of matching exactly one space so
   // that we can tolerate any number of spaces at the start of the list.
 
-  const listMatches = /^([*-]|\d+\.)\s+/.exec(content);
+  const listMatches = /^([*-]|\d+\.)\s+/.exec(context.line_content);
   if (listMatches && listMatches.length > 0) {
     subPrefix = listMatches[0];
   }
@@ -176,21 +124,21 @@ export function createBlockCommentLineOverflowReport(context: CommentContext) {
 
   // To avoid considering trailing whitespace, trim the end of the content.
 
-  const contentTrimmedEnd = content.trimEnd();
+  const contentTrimmedEnd = context.line_content.trimEnd();
 
   // Now that we trimmed the end of the content, we want to again check for whether we actually
   // overflow. The previous check counted trailing whitespace characters. This check does not.
 
-  if ((lengthOfWhiteSpacePrecedingComment + prefix.length + contentTrimmedEnd.length) <=
-    context.max_line_length) {
+  if ((lengthOfWhiteSpacePrecedingComment + context.line_prefix.length +
+    contentTrimmedEnd.length) <= context.max_line_length) {
     return;
   }
 
   // In order to search for the string, first we have to determine the scope of the search. We do
   // not want to be searching for spaces that occur after the threshold.
 
-  const haystackEnd = context.max_line_length - lengthOfWhiteSpacePrecedingComment - prefix.length -
-    subPrefix.length;
+  const haystackEnd = context.max_line_length - lengthOfWhiteSpacePrecedingComment -
+    context.line_prefix.length - subPrefix.length;
 
   // We have to take into account the length of the sub prefix so that we do not match spaces in the
   // sub prefix.
@@ -222,8 +170,8 @@ export function createBlockCommentLineOverflowReport(context: CommentContext) {
 
   let lineBreakPosition = -1;
   if (contentBreakingSpaceSequenceStartPosition > 0) {
-    lineBreakPosition = lengthOfWhiteSpacePrecedingComment + prefix.length + subPrefix.length +
-      contentBreakingSpaceSequenceStartPosition;
+    lineBreakPosition = lengthOfWhiteSpacePrecedingComment + context.line_prefix.length +
+      subPrefix.length + contentBreakingSpaceSequenceStartPosition;
   } else {
     lineBreakPosition = context.max_line_length;
   }
@@ -258,15 +206,16 @@ export function createBlockCommentLineOverflowReport(context: CommentContext) {
   let textToInsert = '\n';
 
   if (context.line === context.comment.loc.start.line) {
-    textToInsert += text.slice(0, lengthOfWhiteSpacePrecedingComment);
-    if (prefix.startsWith('/**')) {
+    textToInsert += context.line_text.slice(0, lengthOfWhiteSpacePrecedingComment);
+    if (context.line_prefix.startsWith('/**')) {
       textToInsert += ' *';
       if (contentBreakingSpaceSequenceStartPosition === -1) {
         textToInsert += ' ';
       }
     }
   } else {
-    textToInsert += text.slice(0, lengthOfWhiteSpacePrecedingComment + prefix.length);
+    textToInsert += context.line_text.slice(0, lengthOfWhiteSpacePrecedingComment +
+      context.line_prefix.length);
   }
 
   if (subPrefix.length > 0) {
@@ -280,7 +229,7 @@ export function createBlockCommentLineOverflowReport(context: CommentContext) {
     loc: context.comment.loc,
     messageId: 'overflow',
     data: {
-      line_length: `${text.length}`,
+      line_length: `${context.line_text.length}`,
       max_length: `${context.max_line_length}`
     },
     fix: function (fixer) {
