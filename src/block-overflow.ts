@@ -14,33 +14,31 @@ export function checkBlockOverflow(context: CommentContext, line: CommentLine) {
     return;
   }
 
-  // If the length of the text of the line less the length of the leading whitespace preceding the
-  // text is more than the threshold then we refuse to analyze the line because it is unclear how to
-  // wrap when every single character is over the line.
+  // If the length of the text of the line less the length of the whitespace preceding the text is
+  // more than the threshold then we refuse to analyze the line because it is unclear how to wrap
+  // when every single character is over the line.
 
   if (line.text.length - line.text_trimmed_start.length >= context.max_line_length) {
     return;
   }
 
-  // Similarly, if the text of the line, less the leading whitespace, combined with the prefix, is
-  // over the threshold then we have a javadoc-like comment that only starts after the threshold, so
-  // we refuse to analyze the line, because it is unclear how to wrap.
+  // If the text of the line, less the leading whitespace, combined with the prefix, is over the
+  // threshold then we have a javadoc-like comment that only starts after the threshold, so we
+  // refuse to analyze the line, because it is unclear how to wrap.
 
   if (line.text.length - line.text_trimmed_start.length + line.prefix.length >=
     context.max_line_length) {
     return;
   }
 
-  // The previous checks counted trailing whitespace characters. This check does not. For this
-  // check, if the line is the last line, then we add back in the trailing whitespace and the
-  // comment's ending star slash. For all other lines the suffix is empty.
+  // Check for overflow considering the suffix.
 
   if (line.text.length - line.text_trimmed_start.length + line.prefix.length +
     line.content_trimmed.length + line.suffix.length <= context.max_line_length) {
     return;
   }
 
-  // Ignore tslint directives.
+  // Ignore tslint directives. These are single-leading-star only.
 
   if (line.index === context.comment.loc.start.line && !line.prefix.startsWith('/**') &&
     line.content.startsWith('tslint:')) {
@@ -53,68 +51,21 @@ export function checkBlockOverflow(context: CommentContext, line: CommentLine) {
     return;
   }
 
-  // Look for a sub prefix in the content. For example, a markdown list element. Keep in mind that
-  // the prefix includes all of its trailing whitespace, so doubly-indented lists look just like
-  // singly-indented lists in that both appear at the start of the content. One reason we want to
-  // look for this subprefix is because we want to exclude the space that is present following the
-  // punctuation (e.g. the trailing space in "* ") from being detected as a candidate break point.
-  // The second reason is that when inserting a new line and shifting some text down to the next
-  // line, we want to preserve the extra list indentation.
-
-  // For example:
-  // * some long line that is a list bullet point
-  //   starts here on the next line
-  // and not here
-  // * and does not start a new list bullet point.
-
-  // The presumption is that the current comment line is not a list.
-
-  // We use a + here instead of a * because I believe markdown only detects a list if there is at
-  // least one space following the punctuation. We use a + instead of matching exactly one space so
-  // that we can tolerate any number of spaces at the start of the list.
+  // Check for markdown to help determine where to break the text.
 
   const listMatches = /^([*-]|\d+\.)\s+/.exec(line.content);
-  const subPrefix = (listMatches && listMatches.length > 0) ? listMatches[0] : '';
+  const mdPrefix = (listMatches && listMatches.length > 0) ? listMatches[0] : '';
 
-  // Locate where to insert a line break. We prefer to not break the line in the midst of a word, so
-  // we want to search for some whitespace. We have to be careful to not consider the whitespace
-  // that is a part of the prefix before the content. We must consider that the content may have
-  // trailing whitespace. Once we grab a substring and search it we are getting the offsets in that
-  // substring. We want the offset relative to the entire line, but we want to only search a part of
-  // it. For now we are only looking at the canonical space, not all whitespace.
-
-  // Find the last character of the last sequence of whitespace characters in the content substring.
-  // Keep in mind this is not the position in the line.
-  // In order to search for the string, first we have to determine the scope of the search. We do
-  // not want to be searching for spaces that occur after the threshold. We have to take into
-  // account the length of the sub prefix so that we do not match spaces in the sub prefix.
-
-  const haystackEnd = context.max_line_length - line.text.length - line.text_trimmed_start.length -
-    line.prefix.length - subPrefix.length;
-  const breakSpaceHaystack = subPrefix.length ?
-    line.content_trimmed.slice(subPrefix.length) :
-    line.content_trimmed;
-  const breakingSpaceSequenceEndPosition = breakSpaceHaystack.lastIndexOf(' ', haystackEnd);
-
-  // We have to consider that we match have matched the last space in a sequence of spaces. Compute
-  // the position of the first space in that sequence. It is the same position as the end space when
-  // there is only one space.
-
-  let breakingSpaceSequenceStartPosition = breakingSpaceSequenceEndPosition;
-  if (breakingSpaceSequenceStartPosition > -1) {
-    while (line.content_trimmed.charAt(breakingSpaceSequenceStartPosition - 1) === ' ') {
-      breakingSpaceSequenceStartPosition--;
-    }
-  }
+  const contentBreakPosition = findContentBreak(context, line, mdPrefix);
 
   // Determine the breaking point in the line itself, taking into account whether we found a space.
   // If no breaking point was found then fallback to breaking at the threshold. Note we rule out
   // a space found at 0, that should never happen because that space should belong to the prefix.
 
   let lineBreakPosition = -1;
-  if (breakingSpaceSequenceStartPosition > 0) {
+  if (contentBreakPosition > 0) {
     lineBreakPosition = line.text.length - line.text_trimmed_start.length + line.prefix.length +
-      subPrefix.length + breakingSpaceSequenceStartPosition;
+      mdPrefix.length + contentBreakPosition;
   } else {
     lineBreakPosition = context.max_line_length;
   }
@@ -152,7 +103,7 @@ export function checkBlockOverflow(context: CommentContext, line: CommentLine) {
     textToInsert += line.text.slice(0, line.text.length - line.text_trimmed_start.length);
     if (line.prefix.startsWith('/**')) {
       textToInsert += ' *';
-      if (breakingSpaceSequenceStartPosition === -1) {
+      if (contentBreakPosition === -1) {
         textToInsert += ' ';
       }
     }
@@ -161,8 +112,8 @@ export function checkBlockOverflow(context: CommentContext, line: CommentLine) {
       line.prefix.length);
   }
 
-  if (subPrefix.length > 0) {
-    textToInsert += ''.padEnd(subPrefix.length, ' ');
+  if (mdPrefix.length > 0) {
+    textToInsert += ''.padEnd(mdPrefix.length, ' ');
   }
 
   return <eslint.Rule.ReportDescriptor>{
@@ -218,4 +169,33 @@ function updatePreformattedState(context: CommentContext, line: CommentLine) {
 
   // Consider overflow.
   return true;
+}
+
+/**
+ * Return the position where to break in the comment line's content. Returns -1 if no breakpoint
+ * found.
+ */
+function findContentBreak(context: CommentContext, line: CommentLine, mdPrefix: string) {
+  const content = line.content_trimmed;
+  const haystack = content.slice(mdPrefix.length);
+
+  // Determine the position in the content from which to start searching for a space in reverse.
+
+  const fromIndex = context.max_line_length - line.text.length - line.text_trimmed_start.length -
+    line.prefix.length - mdPrefix.length;
+
+  // Find the last space.
+
+  const endPos = haystack.lastIndexOf(' ', fromIndex);
+
+  // Find the first space in the sequence of whitespace containing the last space.
+
+  let startPos = endPos;
+  if (startPos > -1) {
+    while (content.charAt(startPos - 1) === ' ') {
+      startPos--;
+    }
+  }
+
+  return startPos;
 }
