@@ -11,28 +11,57 @@ export function createBlockCommentLineUnderflowReport(context: CommentContext) {
 
   const text = context.code.lines[context.line - 1];
 
-  // Check if we are transitioning into a preformatted section or out of one.
-  // TODO: this needs a lot of improvement
-  // TODO: JSDoc @example
+  // Check if we are transitioning into a preformatted section or out of one. The block overflow
+  // function manages the state transition. We just need to know to ignore.
 
-  // If we are in a fenced section then ignore underflow.
-  // TODO: this needs to be updated?
-
-  if (context.in_markdown_fence) {
+  if (context.in_markdown_fence || context.in_jsdoc_example) {
     return;
   }
 
-  // The current line can only underflow when there is a subsequent line. If the current line is the
-  // final line of the comment then the current line cannot underflow.
+  // The current line of a block comment can only underflow when there is a subsequent line. If the
+  // current line is the final line of the comment then there is no subsequent line and so the
+  // current line cannot underflow.
 
   if (context.line === context.comment.loc.end.line) {
     return;
   }
 
-  // If the text length is greater than or equal to the maximum then this is not an underflow. It is
-  // possibly overflow, but that is a separate concern.
+  // TODO: this work is redundant with the work done in the block overflow. I think we need to
+  // promote the logic into a shared state.
 
-  if (text.length >= context.max_line_length) {
+  const textTrimmedStart = text.trimStart();
+
+  let prefix = '';
+  if (context.line === context.comment.loc.start.line) {
+    const matches = /\/\*\*?\s*/.exec(textTrimmedStart);
+    if (matches && matches.length === 1) {
+      prefix = matches[0];
+    }
+  } else {
+    const matches = /\*\s*/.exec(textTrimmedStart);
+    if (matches && matches.length === 1) {
+      prefix = matches[0];
+    }
+  }
+
+  let content = '';
+  if (context.line === context.comment.loc.end.line) {
+    content = textTrimmedStart.slice(prefix.length, -2);
+  } else {
+    content = textTrimmedStart.slice(prefix.length);
+  }
+
+  const lengthOfWhiteSpacePrecedingComment = text.length - textTrimmedStart.length;
+
+  const contentTrimmedEnd = content.trimEnd();
+
+  // If the length of the trimmed text of the current line is greater than or equal to the maximum
+  // line length then this is not overflow.
+
+  if ((lengthOfWhiteSpacePrecedingComment + prefix.length + contentTrimmedEnd.length) >=
+    context.max_line_length) {
+    console.debug('trimmed content is greater than or equal to max line length, not underflow',
+      context.line, lengthOfWhiteSpacePrecedingComment + prefix.length + contentTrimmedEnd.length);
     return;
   }
 
@@ -42,9 +71,11 @@ export function createBlockCommentLineUnderflowReport(context: CommentContext) {
   // return for now. I could merge this with the previous condition but I want to keep it clear for
   // now.
 
-  if (text.length + 1 === context.max_line_length) {
-    return;
-  }
+  // TODO: this is wrong
+
+  // if (text.length + 1 === context.max_line_length) {
+  //   return;
+  // }
 
   // Underflow can only occur if there is content on the current line of the comment. If the line is
   // the initial line of the block comment and does not contain content, or some intermediate

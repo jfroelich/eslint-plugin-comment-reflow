@@ -12,17 +12,6 @@ export function createBlockCommentLineOverflowReport(context: CommentContext) {
 
   const text = context.code.lines[context.line - 1];
 
-  // Determine the index of the current line. The term "index" here aligns with what ESLint refers
-  // to as the offset of the first character of the line relative to the first character in the
-  // entire file, which has index 0.
-
-  // An alternative approach to calculating this value would be to sum up the lengths of the
-  // previous lines. But it turns out that approach has not so obvious complexity. We do not have
-  // easy access to the line breaks in use. The API call here is better because it properly accounts
-  // for line breaks in the same way as the rest of ESLint.
-
-  const lineStartIndex = context.code.getIndexFromLoc({ line: context.line, column: 0 });
-
   // Determine the amount of whitespace preceding the comment on the current line. We do this so
   // that we can figure out where the content of the comment actually starts. We need to consider
   // the leading whitespace for several reasons. We can use the indent level combined with the line
@@ -238,6 +227,17 @@ export function createBlockCommentLineOverflowReport(context: CommentContext) {
   } else {
     lineBreakPosition = context.max_line_length;
   }
+
+  // Determine the index of the current line. The term "index" here aligns with what ESLint refers
+  // to as the offset of the first character of the line relative to the first character in the
+  // entire file, which has index 0.
+
+  // An alternative approach to calculating this value would be to sum up the lengths of the
+  // previous lines. But it turns out that approach has not so obvious complexity. We do not have
+  // easy access to the line breaks in use. The API call here is better because it properly accounts
+  // for line breaks in the same way as the rest of ESLint.
+
+  const lineStartIndex = context.code.getIndexFromLoc({ line: context.line, column: 0 });
 
   // Compute the range of the text after which we will insert some new text. This range is relative
   // to the entire file.
