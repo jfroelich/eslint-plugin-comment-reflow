@@ -61,8 +61,6 @@ export function checkBlockUnderflow(context: CommentContext, line: CommentLine) 
 
   if ((lengthOfWhiteSpacePrecedingComment + prefix.length + contentTrimmedEnd.length) >=
     context.max_line_length) {
-    console.debug('trimmed content is greater than or equal to max line length, not underflow',
-      line, lengthOfWhiteSpacePrecedingComment + prefix.length + contentTrimmedEnd.length);
     return;
   }
 

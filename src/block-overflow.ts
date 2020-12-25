@@ -220,8 +220,6 @@ export function checkBlockOverflow(context: CommentContext, line: CommentLine) {
     textToInsert += ''.padEnd(subPrefix.length, ' ');
   }
 
-  console.debug('text to insert: "%s"', textToInsert.replace(/\n/, '\\n'));
-
   return <eslint.Rule.ReportDescriptor>{
     node: context.node,
     loc: context.comment.loc,
