@@ -8,6 +8,11 @@ export interface CommentLine {
   index: number;
 
   /**
+   * Whitespace characters leading up to the prefix.
+   */
+  lead_whitespace: string;
+
+  /**
    * The full text of a line containing a comment. The text does not include line break characters
    * because of how ESLint parses the lines. The text may include characters that are not a part of
    * the comment because the value is derived from a value in ESLint's line array which is computed
@@ -15,11 +20,6 @@ export interface CommentLine {
    * slashes.
    */
   text: string;
-
-  /**
-   * The value of `line_text` after left trim
-   */
-  text_trimmed_start: string;
 
   /**
    * The slash and asterisk(s) along with immediately subsequent whitespace of a comment line. This
@@ -31,12 +31,19 @@ export interface CommentLine {
   /**
    * The text of the comment line excluding leading whitespace and excluding any leading slashes and
    * leading asterisks (and possible whitespace following the asterisks). Markdown syntax is a part
-   * of the content. The content is left trimmed but is not right trimmed.
+   * of the content. The content is left trimmed but is not right trimmed. This does not include
+   * the suffix.
+   *
+   * @todo right trim, move all whitespace to suffix, get rid of content_trimmed
    */
   content: string;
 
   /**
-   * The value of comment but also right trimmed (so fully trimmed).
+   * The value of comment but also right trimmed (so fully trimmed). This does not include the
+   * suffix.
+   *
+   * @todo now that we have a suffix and assign all trailing whitespace to it, maybe there is no
+   * need for this?
    */
   content_trimmed: string;
 
@@ -52,19 +59,20 @@ export function parseLine(code: eslint.SourceCode, comment: estree.Comment, line
   const output = <CommentLine>{};
   output.index = line;
   output.text = code.lines[line - 1];
-  output.text_trimmed_start = output.text.trimStart();
+
+  const textTrimmedStart = output.text.trimStart();
+  output.lead_whitespace = output.text.slice(0, output.text.length - textTrimmedStart.length);
 
   if (comment.type === 'Block') {
     if (line === comment.loc.start.line) {
-      const matches = /^\/\*\*?\s*/.exec(output.text_trimmed_start);
+      const matches = /^\/\*\*?\s*/.exec(textTrimmedStart);
       output.prefix = (matches && matches.length) ? matches[0] : '';
     } else if (line === comment.loc.end.line) {
-      const haystack = output.text.slice(output.text.length - output.text_trimmed_start.length,
-        comment.loc.end.column - 2);
+      const haystack = output.text.slice(output.lead_whitespace.length, comment.loc.end.column - 2);
       const matches = /^\*\s*/.exec(haystack);
       output.prefix = (matches && matches.length) ? matches[0] : '';
     } else {
-      const matches = /^\*\s*/.exec(output.text_trimmed_start);
+      const matches = /^\*\s*/.exec(textTrimmedStart);
       output.prefix = (matches && matches.length) ? matches[0] : '';
     }
   } else if (comment.type === 'Line') {
@@ -76,22 +84,20 @@ export function parseLine(code: eslint.SourceCode, comment: estree.Comment, line
   }
 
   if (line === comment.loc.end.line && comment.type === 'Block') {
-    output.content = output.text.slice(output.text.length - output.text_trimmed_start.length +
-      output.prefix.length, comment.loc.end.column - 2);
+    output.content = output.text.slice(output.lead_whitespace.length + output.prefix.length,
+      comment.loc.end.column - 2);
   } else {
-    output.content = output.text_trimmed_start.slice(output.prefix.length);
+    output.content = textTrimmedStart.slice(output.prefix.length);
   }
 
   output.content_trimmed = output.content.trimEnd();
 
   if (comment.type === 'Block' && line === comment.loc.end.line) {
-    output.suffix = output.text.slice(output.text.length - output.text_trimmed_start.length +
-      output.prefix.length + output.content_trimmed.length, comment.loc.end.column);
+    output.suffix = output.text.slice(output.lead_whitespace.length + output.prefix.length +
+      output.content_trimmed.length, comment.loc.end.column);
   } else {
     output.suffix = '';
   }
-
-  console.debug(output);
 
   return output;
 }

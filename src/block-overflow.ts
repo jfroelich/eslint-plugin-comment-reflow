@@ -18,7 +18,7 @@ export function checkBlockOverflow(context: CommentContext, line: CommentLine) {
   // more than the threshold then we refuse to analyze the line because it is unclear how to wrap
   // when every single character is over the line.
 
-  if (line.text.length - line.text_trimmed_start.length >= context.max_line_length) {
+  if (line.lead_whitespace.length >= context.max_line_length) {
     return;
   }
 
@@ -26,15 +26,15 @@ export function checkBlockOverflow(context: CommentContext, line: CommentLine) {
   // threshold then we have a javadoc-like comment that only starts after the threshold, so we
   // refuse to analyze the line, because it is unclear how to wrap.
 
-  if (line.text.length - line.text_trimmed_start.length + line.prefix.length >=
+  if (line.lead_whitespace.length + line.prefix.length >=
     context.max_line_length) {
     return;
   }
 
   // Check for overflow considering the suffix.
 
-  if (line.text.length - line.text_trimmed_start.length + line.prefix.length +
-    line.content_trimmed.length + line.suffix.length <= context.max_line_length) {
+  if (line.lead_whitespace.length + line.prefix.length +  line.content_trimmed.length +
+    line.suffix.length <= context.max_line_length) {
     return;
   }
 
@@ -56,15 +56,19 @@ export function checkBlockOverflow(context: CommentContext, line: CommentLine) {
   const listMatches = /^([*-]|\d+\.)\s+/.exec(line.content);
   const mdPrefix = (listMatches && listMatches.length > 0) ? listMatches[0] : '';
 
-  const contentBreakPosition = findContentBreak(context, line, mdPrefix);
+  // TODO: this is bugged
+
+  const contentBreakPosition = findContentBreak(line, mdPrefix);
 
   // Determine the breaking point in the line itself, taking into account whether we found a space.
   // If no breaking point was found then fallback to breaking at the threshold. Note we rule out
   // a space found at 0, that should never happen because that space should belong to the prefix.
 
+  // TODO: this is bugged, it might be the contentBreakPosition though, see test case
+
   let lineBreakPosition = -1;
   if (contentBreakPosition > 0) {
-    lineBreakPosition = line.text.length - line.text_trimmed_start.length + line.prefix.length +
+    lineBreakPosition = line.lead_whitespace.length + line.prefix.length +
       mdPrefix.length + contentBreakPosition;
   } else {
     lineBreakPosition = context.max_line_length;
@@ -94,25 +98,40 @@ export function checkBlockOverflow(context: CommentContext, line: CommentLine) {
   // whether there is whitespace or not. To test, use a breaking sequence of a couple spaces and
   // notice how the next line is has strange post-prefix indent, because the extra spaces are
   // carried over, but we want to get rid of them.
-
   // TODO: we need to figure out whether to insert CRLF or just LF
 
   let textToInsert = '\n';
 
-  if (line.index === context.comment.loc.start.line) {
-    textToInsert += line.text.slice(0, line.text.length - line.text_trimmed_start.length);
+  if (line.index === context.comment.loc.start.line &&
+    line.index === context.comment.loc.end.line) {
+    textToInsert += line.text.slice(0, line.lead_whitespace.length);
+
+    // When wrapping the last line of the comment we only want to insert prefix characters if there
+    // is some non-whitespace non-suffix text after the breakpoint
+
+    if (context.comment.loc.end.column - line.suffix.length < context.max_line_length) {
+      if (line.prefix.startsWith('/**')) {
+        textToInsert += ' *';
+        if (contentBreakPosition === -1) {
+          textToInsert += ' ';
+        }
+      }
+
+      textToInsert += ''.padEnd(mdPrefix.length, ' ');
+    }
+  } else if (line.index === context.comment.loc.start.line) {
+    textToInsert += line.text.slice(0, line.lead_whitespace.length);
     if (line.prefix.startsWith('/**')) {
       textToInsert += ' *';
       if (contentBreakPosition === -1) {
         textToInsert += ' ';
       }
     }
+    textToInsert += ''.padEnd(mdPrefix.length, ' ');
+  } else if (line.index === context.comment.loc.end.line) {
+    textToInsert += line.text.slice(0, line.lead_whitespace.length);
   } else {
-    textToInsert += line.text.slice(0, line.text.length - line.text_trimmed_start.length +
-      line.prefix.length);
-  }
-
-  if (mdPrefix.length > 0) {
+    textToInsert += line.text.slice(0, line.lead_whitespace.length + line.prefix.length);
     textToInsert += ''.padEnd(mdPrefix.length, ' ');
   }
 
@@ -175,24 +194,25 @@ function updatePreformattedState(context: CommentContext, line: CommentLine) {
  * Return the position where to break in the comment line's content. Returns -1 if no breakpoint
  * found.
  */
-function findContentBreak(context: CommentContext, line: CommentLine, mdPrefix: string) {
-  const content = line.content_trimmed;
-  const haystack = content.slice(mdPrefix.length);
+function findContentBreak(line: CommentLine, mdPrefix: string) {
+  // Compute the region of text in which we will search for a space. We do not want to search the
+  // entire text of the line. We want to skip past the leading whitespace before the prefix, the
+  // prefix itself, and any markdown prefix should one exist. Similarly, we do not want to consider
+  // the whitespace that occurs after the content. The indices here are defined relative to the
+  // start of the line (so column 0), not the file, and not parts of the comment.
 
-  // Determine the position in the content from which to start searching for a space in reverse.
+  // TODO: is this wrong?
 
-  const fromIndex = context.max_line_length - line.text.length - line.text_trimmed_start.length -
-    line.prefix.length - mdPrefix.length;
-
-  // Find the last space.
-
-  const endPos = haystack.lastIndexOf(' ', fromIndex);
+  const regionStart = line.lead_whitespace.length + line.prefix.length + mdPrefix.length;
+  const regionEnd = regionStart + line.content.length;
+  const regionText = line.text.slice(regionStart, regionEnd);
+  const endPos = regionText.lastIndexOf(' ');
 
   // Find the first space in the sequence of whitespace containing the last space.
 
   let startPos = endPos;
   if (startPos > -1) {
-    while (content.charAt(startPos - 1) === ' ') {
+    while (regionText.charAt(startPos - 1) === ' ') {
       startPos--;
     }
   }
