@@ -1,8 +1,8 @@
 import type eslint from 'eslint';
 import { CommentContext } from './comment-context';
-import { CommentLine } from './line-data';
+import { CommentLineDesc } from './comment-line-desc';
 
-export function checkBlockOverflow(context: CommentContext, line: CommentLine) {
+export function checkBlockOverflow(context: CommentContext, line: CommentLineDesc) {
   if (!updatePreformattedState(context, line)) {
     return;
   }
@@ -153,7 +153,7 @@ export function checkBlockOverflow(context: CommentContext, line: CommentLine) {
  * Detects transitions into and out of a preformatted state in a block comment. Returns true if the
  * text should still be considered for overflow.
  */
-function updatePreformattedState(context: CommentContext, line: CommentLine) {
+function updatePreformattedState(context: CommentContext, line: CommentLineDesc) {
   if (context.in_md_fence) {
     if (line.index > context.comment.loc.start.line && line.content.startsWith('```')) {
       // Exiting markdown fence section. Do not consider overflow.
@@ -194,7 +194,7 @@ function updatePreformattedState(context: CommentContext, line: CommentLine) {
  * Return the position where to break in the comment line's content. Returns -1 if no breakpoint
  * found.
  */
-function findContentBreak(line: CommentLine, mdPrefix: string) {
+function findContentBreak(line: CommentLineDesc, mdPrefix: string) {
   // Compute the region of text in which we will search for a space. We do not want to search the
   // entire text of the line. We want to skip past the leading whitespace before the prefix, the
   // prefix itself, and any markdown prefix should one exist. Similarly, we do not want to consider

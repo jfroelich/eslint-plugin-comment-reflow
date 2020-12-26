@@ -1,9 +1,9 @@
 import assert from 'assert';
 import eslint from 'eslint';
 import { CommentContext } from './comment-context';
-import { CommentLine } from './line-data';
+import { CommentLineDesc } from './comment-line-desc';
 
-export function checkLineUnderflow(context: CommentContext, line: CommentLine) {
+export function checkLineUnderflow(context: CommentContext, line: CommentLineDesc) {
   // Get the text of the line. Do not confuse this with comment value. line is 1 based so we
   // subtract 1 to get the line in the lines array.
 

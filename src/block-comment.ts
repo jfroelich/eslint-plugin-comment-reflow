@@ -1,7 +1,7 @@
 import { checkBlockOverflow } from './block-overflow';
 import { checkBlockUnderflow } from './block-underflow';
 import { CommentContext } from './comment-context';
-import { parseLine } from './line-data';
+import { parseLine } from './comment-line-desc';
 
 /**
  * Generate a fix for the first error found in block comment.

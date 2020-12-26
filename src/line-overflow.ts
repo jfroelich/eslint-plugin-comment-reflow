@@ -1,8 +1,8 @@
 import eslint from 'eslint';
 import { CommentContext } from './comment-context';
-import { CommentLine } from './line-data';
+import { CommentLineDesc } from './comment-line-desc';
 
-export function checkLineOverflow(context: CommentContext, line: CommentLine) {
+export function checkLineOverflow(context: CommentContext, line: CommentLineDesc) {
   const text = line.text;
 
   if (text.length <= context.max_line_length) {

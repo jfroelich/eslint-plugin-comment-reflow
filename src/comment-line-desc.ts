@@ -1,7 +1,7 @@
 import type eslint from 'eslint';
 import type estree from 'estree';
 
-export interface CommentLine {
+export interface CommentLineDesc {
   /**
    * The ESLint line index, which is 1-based.
    */
@@ -56,7 +56,7 @@ export interface CommentLine {
 }
 
 export function parseLine(code: eslint.SourceCode, comment: estree.Comment, line: number) {
-  const output = <CommentLine>{};
+  const output = <CommentLineDesc>{};
   output.index = line;
   output.text = code.lines[line - 1];
 

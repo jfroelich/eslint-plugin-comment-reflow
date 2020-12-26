@@ -1,5 +1,5 @@
 import { CommentContext } from './comment-context';
-import { parseLine } from './line-data';
+import { parseLine } from './comment-line-desc';
 import { checkLineOverflow } from './line-overflow';
 import { checkLineUnderflow } from './line-underflow';
 
