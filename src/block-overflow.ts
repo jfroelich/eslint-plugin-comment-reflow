@@ -7,69 +7,79 @@ export function checkBlockOverflow(context: CommentContext, line: CommentLineDes
     return;
   }
 
-  // If the length of the text of the line less its line break characters is less than the threshold
-  // then the line does not overflow.
+  // If the total line length is less than the threshold then it does not overflow.
 
   if (line.text.length <= context.max_line_length) {
     return;
   }
 
-  // If the length of the text of the line less the length of the whitespace preceding the text is
-  // more than the threshold then we refuse to analyze the line because it is unclear how to wrap
-  // when every single character is over the line.
+  // If leading whitespace is over the threshold then the line overflows but we ignore.
 
   if (line.lead_whitespace.length >= context.max_line_length) {
     return;
   }
 
-  // If the text of the line, less the leading whitespace, combined with the prefix, is over the
-  // threshold then we have a javadoc-like comment that only starts after the threshold, so we
-  // refuse to analyze the line, because it is unclear how to wrap.
+  // If the line length including just the prefix is over the threshold then the line overflows but
+  // we ignore.
 
-  if (line.lead_whitespace.length + line.prefix.length >=
+  if (line.lead_whitespace.length + line.open.length + line.prefix.length >=
     context.max_line_length) {
     return;
   }
 
-  // Check for overflow considering the suffix.
+  // If the total line length less trailing whitespace is under the threshold then we ignore. We
+  // know that the total line length is greater than the threshold otherwise we would have already
+  // exited. This means some line has a bunch of extra spaces at the end of it. The line visually
+  // fits under the threshold but the spaces are what cause the length to cross the threshold. This
+  // isn't something we want to fix. This happens to authors who do not use the no-trailing-spaces
+  // rule. We have to specially handle when we are at the final line because the suffix trailing
+  // whitespace is a part of the comment.
 
-  if (line.lead_whitespace.length + line.prefix.length +  line.content_trimmed.length +
-    line.suffix.length <= context.max_line_length) {
+  if (line.index < context.comment.loc.end.line && line.lead_whitespace.length + line.open.length +
+    line.prefix.length + line.content.length <= context.max_line_length) {
+    return;
+  } else if (line.index === context.comment.loc.end.line && line.lead_whitespace.length +
+    line.open.length + line.prefix.length + line.content.length + line.suffix.length +
+    line.close.length <= context.max_line_length) {
     return;
   }
 
-  // Ignore tslint directives. These are single-leading-star only.
+  // Ignore tslint directives.
 
-  if (line.index === context.comment.loc.start.line && !line.prefix.startsWith('/**') &&
+  if (line.index === context.comment.loc.start.line && !line.prefix.startsWith('*') &&
     line.content.startsWith('tslint:')) {
     return;
   }
 
-  // Ignore see tags.
+  // Parse the content for markdown syntax.
 
-  if (line.content.startsWith('@see')) {
+  // TODO: support jsdoc here, not just markdown, this should be a second level prefix that matches
+  // either jsdoc or markdown
+
+  const listMatches = /^([*-]|\d+\.)\s+/.exec(line.content);
+  const mdPrefix = listMatches ? listMatches[0] : '';
+
+  // Ignore see tags.
+  // TODO: once we properly check for jsdoc tag then we should be testing against that substring
+  // instead of content?
+
+  if (line.prefix.startsWith('*') && line.content.startsWith('@see')) {
     return;
   }
 
-  // Check for markdown to help determine where to break the text.
-
-  const listMatches = /^([*-]|\d+\.)\s+/.exec(line.content);
-  const mdPrefix = (listMatches && listMatches.length > 0) ? listMatches[0] : '';
-
-  // TODO: this is bugged
-
-  const contentBreakPosition = findContentBreak(line, mdPrefix);
+  const contentBreakPosition = findContentBreak(line, mdPrefix, context.max_line_length);
 
   // Determine the breaking point in the line itself, taking into account whether we found a space.
   // If no breaking point was found then fallback to breaking at the threshold. Note we rule out
   // a space found at 0, that should never happen because that space should belong to the prefix.
 
-  // TODO: this is bugged, it might be the contentBreakPosition though, see test case
-
   let lineBreakPosition = -1;
   if (contentBreakPosition > 0) {
-    lineBreakPosition = line.lead_whitespace.length + line.prefix.length +
-      mdPrefix.length + contentBreakPosition;
+    lineBreakPosition = contentBreakPosition;
+  } else if (line.index === context.comment.loc.end.line &&
+    context.comment.loc.end.column - 1 === context.max_line_length) {
+    // Avoid breaking right in the middle of the close
+    lineBreakPosition = context.max_line_length - 1;
   } else {
     lineBreakPosition = context.max_line_length;
   }
@@ -105,31 +115,19 @@ export function checkBlockOverflow(context: CommentContext, line: CommentLineDes
   if (line.index === context.comment.loc.start.line &&
     line.index === context.comment.loc.end.line) {
     textToInsert += line.text.slice(0, line.lead_whitespace.length);
-
-    // When wrapping the last line of the comment we only want to insert prefix characters if there
-    // is some non-whitespace non-suffix text after the breakpoint
-
-    if (context.comment.loc.end.column - line.suffix.length < context.max_line_length) {
-      if (line.prefix.startsWith('/**')) {
-        textToInsert += ' *';
-        if (contentBreakPosition === -1) {
-          textToInsert += ' ';
-        }
-      }
-
-      textToInsert += ''.padEnd(mdPrefix.length, ' ');
+    if (line.prefix.startsWith('*')) {
+      textToInsert += ' ' + line.prefix + ''.padEnd(mdPrefix.length);
     }
   } else if (line.index === context.comment.loc.start.line) {
     textToInsert += line.text.slice(0, line.lead_whitespace.length);
-    if (line.prefix.startsWith('/**')) {
-      textToInsert += ' *';
-      if (contentBreakPosition === -1) {
-        textToInsert += ' ';
-      }
+    if (line.prefix.startsWith('*')) {
+      textToInsert += ' ' + line.prefix + ''.padEnd(mdPrefix.length);
     }
-    textToInsert += ''.padEnd(mdPrefix.length, ' ');
   } else if (line.index === context.comment.loc.end.line) {
     textToInsert += line.text.slice(0, line.lead_whitespace.length);
+    if (line.prefix.startsWith('*')) {
+      textToInsert += line.prefix + ''.padEnd(mdPrefix.length);
+    }
   } else {
     textToInsert += line.text.slice(0, line.lead_whitespace.length + line.prefix.length);
     textToInsert += ''.padEnd(mdPrefix.length, ' ');
@@ -150,7 +148,7 @@ export function checkBlockOverflow(context: CommentContext, line: CommentLineDes
 }
 
 /**
- * Detects transitions into and out of a preformatted state in a block comment. Returns true if the
+ * Detects transitions into and out of a preformatted state in a block comment. Returns whether the
  * text should still be considered for overflow.
  */
 function updatePreformattedState(context: CommentContext, line: CommentLineDesc) {
@@ -191,31 +189,40 @@ function updatePreformattedState(context: CommentContext, line: CommentLineDesc)
 }
 
 /**
- * Return the position where to break in the comment line's content. Returns -1 if no breakpoint
- * found.
+ * Return the position where to break the text or -1. This only searches in a subregion of the text
+ * so as to not match whitespace in other places.
+ *
+ * @todo can/should this be generalized to use in the Line comment overflow algorithm?
  */
-function findContentBreak(line: CommentLineDesc, mdPrefix: string) {
-  // Compute the region of text in which we will search for a space. We do not want to search the
-  // entire text of the line. We want to skip past the leading whitespace before the prefix, the
-  // prefix itself, and any markdown prefix should one exist. Similarly, we do not want to consider
-  // the whitespace that occurs after the content. The indices here are defined relative to the
-  // start of the line (so column 0), not the file, and not parts of the comment.
+function findContentBreak(line: CommentLineDesc, mdPrefix: string, maxLineLength: number) {
+  // Find nothing when the content is in bounds.
 
-  // TODO: is this wrong?
+  if (line.lead_whitespace.length + line.open.length + line.prefix.length +
+    line.content.length <= maxLineLength) {
+    return -1;
+  }
 
-  const regionStart = line.lead_whitespace.length + line.prefix.length + mdPrefix.length;
-  const regionEnd = regionStart + line.content.length;
-  const regionText = line.text.slice(regionStart, regionEnd);
-  const endPos = regionText.lastIndexOf(' ');
+  // Determine the search space for searching for space.
 
-  // Find the first space in the sequence of whitespace containing the last space.
+  const region = line.text.slice(line.lead_whitespace.length + line.open.length +
+    line.prefix.length + mdPrefix.length, line.lead_whitespace.length + line.open.length +
+    line.prefix.length + mdPrefix.length + line.content.length);
+
+  // Find the last space in the last sequence of spaces.
+
+  const endPos = region.lastIndexOf(' ');
+
+  // Find the first space in the sequence of spaces.
 
   let startPos = endPos;
   if (startPos > -1) {
-    while (regionText.charAt(startPos - 1) === ' ') {
+    while (region.charAt(startPos - 1) === ' ') {
       startPos--;
     }
   }
 
-  return startPos;
+  // Return the position in the search space translated to the position in the line.
+
+  return startPos === -1 ? startPos : line.lead_whitespace.length + line.open.length +
+    line.prefix.length + mdPrefix.length + startPos;
 }

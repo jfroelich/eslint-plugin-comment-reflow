@@ -173,7 +173,5 @@ export function parseLine(code: eslint.SourceCode, comment: estree.Comment, line
         output.prefix.length + output.content.length);
   }
 
-  console.debug(output);
-
   return output;
 }
