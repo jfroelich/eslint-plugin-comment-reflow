@@ -51,14 +51,6 @@ export function checkBlockOverflow(context: CommentContext, line: CommentLineDes
     return;
   }
 
-  // Parse the content for markdown syntax.
-
-  // TODO: support jsdoc here, not just markdown, this should be a second level prefix that matches
-  // either jsdoc or markdown
-
-  const listMatches = /^([*-]|\d+\.)\s+/.exec(line.content);
-  const mdPrefix = listMatches ? listMatches[0] : '';
-
   // Ignore see tags.
   // TODO: once we properly check for jsdoc tag then we should be testing against that substring
   // instead of content?
@@ -67,7 +59,7 @@ export function checkBlockOverflow(context: CommentContext, line: CommentLineDes
     return;
   }
 
-  const contentBreakPosition = findContentBreak(line, mdPrefix, context.max_line_length);
+  const contentBreakPosition = findContentBreak(line, context.max_line_length);
 
   // Determine the breaking point in the line itself, taking into account whether we found a space.
   // If no breaking point was found then fallback to breaking at the threshold. Note we rule out
@@ -116,21 +108,21 @@ export function checkBlockOverflow(context: CommentContext, line: CommentLineDes
     line.index === context.comment.loc.end.line) {
     textToInsert += line.text.slice(0, line.lead_whitespace.length);
     if (line.prefix.startsWith('*')) {
-      textToInsert += ' ' + line.prefix + ''.padEnd(mdPrefix.length);
+      textToInsert += ' ' + line.prefix + ''.padEnd(line.markup.length + line.markup_space.length);
     }
   } else if (line.index === context.comment.loc.start.line) {
     textToInsert += line.text.slice(0, line.lead_whitespace.length);
     if (line.prefix.startsWith('*')) {
-      textToInsert += ' ' + line.prefix + ''.padEnd(mdPrefix.length);
+      textToInsert += ' ' + line.prefix + ''.padEnd(line.markup.length + line.markup_space.length);
     }
   } else if (line.index === context.comment.loc.end.line) {
     textToInsert += line.text.slice(0, line.lead_whitespace.length);
     if (line.prefix.startsWith('*')) {
-      textToInsert += line.prefix + ''.padEnd(mdPrefix.length);
+      textToInsert += line.prefix + ''.padEnd(line.markup.length + line.markup_space.length);
     }
   } else {
     textToInsert += line.text.slice(0, line.lead_whitespace.length + line.prefix.length);
-    textToInsert += ''.padEnd(mdPrefix.length, ' ');
+    textToInsert += ''.padEnd(line.markup.length +  line.markup_space.length, ' ');
   }
 
   return <eslint.Rule.ReportDescriptor>{
@@ -194,7 +186,7 @@ function updatePreformattedState(context: CommentContext, line: CommentLineDesc)
  *
  * @todo can/should this be generalized to use in the Line comment overflow algorithm?
  */
-function findContentBreak(line: CommentLineDesc, mdPrefix: string, maxLineLength: number) {
+function findContentBreak(line: CommentLineDesc, maxLineLength: number) {
   // Find nothing when the content is in bounds.
 
   if (line.lead_whitespace.length + line.open.length + line.prefix.length +
@@ -204,9 +196,11 @@ function findContentBreak(line: CommentLineDesc, mdPrefix: string, maxLineLength
 
   // Determine the search space for searching for space.
 
-  const region = line.text.slice(line.lead_whitespace.length + line.open.length +
-    line.prefix.length + mdPrefix.length, line.lead_whitespace.length + line.open.length +
-    line.prefix.length + mdPrefix.length + line.content.length);
+  const regionStart = line.lead_whitespace.length + line.open.length + line.prefix.length +
+    line.markup.length + line.markup_space.length;
+  const regionEnd = Math.min(maxLineLength,
+    line.lead_whitespace.length + line.open.length + line.prefix.length + line.content.length);
+  const region = line.text.slice(regionStart, regionEnd);
 
   // Find the last space in the last sequence of spaces.
 
@@ -224,5 +218,5 @@ function findContentBreak(line: CommentLineDesc, mdPrefix: string, maxLineLength
   // Return the position in the search space translated to the position in the line.
 
   return startPos === -1 ? startPos : line.lead_whitespace.length + line.open.length +
-    line.prefix.length + mdPrefix.length + startPos;
+    line.prefix.length + line.markup.length + line.markup_space.length + startPos;
 }

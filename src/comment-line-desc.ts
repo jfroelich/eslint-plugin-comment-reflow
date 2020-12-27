@@ -52,6 +52,18 @@ export interface CommentLineDesc {
   content: string;
 
   /**
+   * Overlaps with content. The content is parsed for semantic information such as markdown or
+   * jsdoc.
+   */
+  markup: string;
+
+  /**
+   * Overlaps with content. Represents the whitespace immediately following the markup token up to
+   * the first non-space character (exclusive), if any markup was found.
+   */
+  markup_space: string;
+
+  /**
    * On any line other than the last line of the comment, this is an empty string. On the last line
    * of the comment, this is all of the whitespace following the content and the final star slash.
    * This does not include any characters after the final star slash.
@@ -147,6 +159,22 @@ export function parseLine(code: eslint.SourceCode, comment: estree.Comment, line
   } else if (comment.type === 'Line') {
     output.content = output.text.slice(output.lead_whitespace.length + output.open.length +
       output.prefix.length).trimEnd();
+  }
+
+  // Parse markup such as markdown and jsdoc.
+
+  if (output.content.length) {
+    const matches = /^([*-]|\d+\.|@[a-zA-Z]+)(\s+)/.exec(output.content);
+    if (matches && matches.length === 3) {
+      output.markup = matches[1];
+      output.markup_space = matches[2];
+    } else {
+      output.markup = '';
+      output.markup_space = '';
+    }
+  } else {
+    output.markup = '';
+    output.markup_space = '';
   }
 
   // Parse the suffix. For a single line comment this is all trailing whitespace after the last
