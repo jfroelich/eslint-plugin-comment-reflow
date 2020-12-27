@@ -127,7 +127,16 @@ export function checkBlockOverflow(context: CommentContext, line: CommentLineDes
 
   return <eslint.Rule.ReportDescriptor>{
     node: context.node,
-    loc: context.comment.loc,
+    loc: {
+      start: {
+        line: line.index,
+        column: 0
+      },
+      end: {
+        line: line.index,
+        column: line.text.length
+      }
+    },
     messageId: 'overflow',
     data: {
       line_length: `${line.text.length}`,
