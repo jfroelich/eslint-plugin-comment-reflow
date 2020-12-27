@@ -1,12 +1,11 @@
+/**
+ * Describes the line of a comment
+ */
 export interface CommentLineDesc {
-  /**
-   * The ESLint line index, which is 1-based.
-   */
+  /** The ESLint line index, which is 1-based. */
   index: number;
 
-  /**
-   * Whitespace characters leading up to the open or prefix.
-   */
+  /** Whitespace characters leading up to the open or prefix. */
   lead_whitespace: string;
 
   /**
@@ -18,7 +17,7 @@ export interface CommentLineDesc {
   /**
    * The characters that end the comment. For block comments this is only set on the last line. For
    * single line comments this is an empty string. This does not include the whitespace preceding or
-   * following the syntax.
+   * following the star slash.
    */
   close: string;
 
@@ -39,12 +38,7 @@ export interface CommentLineDesc {
   prefix: string;
 
   /**
-   * The text of the comment line excluding leading whitespace and excluding any leading slashes and
-   * leading asterisks (and possible whitespace following the asterisks). Markdown syntax is a part
-   * of the content. The content is left trimmed but is not right trimmed. This does not include
-   * the suffix.
-   *
-   * @todo right trim, move all whitespace to suffix, get rid of content_trimmed
+   * The text of the comment line excluding leading and trailing whitespace. Overlaps with markup.
    */
   content: string;
 
@@ -60,10 +54,6 @@ export interface CommentLineDesc {
    */
   markup_space: string;
 
-  /**
-   * On any line other than the last line of the comment, this is an empty string. On the last line
-   * of the comment, this is all of the whitespace following the content and the final star slash.
-   * This does not include any characters after the final star slash.
-   */
+  /** Whitespace that follows the content and precedes the close. */
   suffix: string;
 }

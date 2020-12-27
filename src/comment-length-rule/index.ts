@@ -10,8 +10,8 @@ export const commentLengthRule: eslint.Rule.RuleModule = {
     type: 'layout',
     fixable: 'whitespace',
     messages: {
-      overflow: 'Comment line overflows',
-      underflow: 'Comment line underflows'
+      overflow: 'Comment line should wrap',
+      underflow: 'Comment lines should be merged'
     }
   },
   create: createCommentLengthRule
@@ -19,7 +19,7 @@ export const commentLengthRule: eslint.Rule.RuleModule = {
 
 function createCommentLengthRule(context: eslint.Rule.RuleContext) {
   return {
-    Program(node: estree.Node) {
+    Program: function(node: estree.Node) {
       return analyzeProgram(context, node);
     }
   };
