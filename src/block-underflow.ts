@@ -5,7 +5,6 @@ import { findContentBreak } from './find-content-break';
 
 export function checkBlockUnderflow(context: CommentContext, previousLine: CommentLineDesc,
   currentLine: CommentLineDesc) {
-  console.debug('analyzing current line %d', currentLine.index);
   if (context.in_md_fence || context.in_jsdoc_example) {
     return;
   }
@@ -15,175 +14,157 @@ export function checkBlockUnderflow(context: CommentContext, previousLine: Comme
   // TODO: what about a line that appears empty but is actually whitespace?
 
   if (previousLine.content.length === 0) {
-    console.debug('the line that precedes line %d is empty and therefore does not underflow',
-      currentLine.index);
     return;
   }
 
   // If the length of the previous line is greater than or equal to the threshold then the previous
   // line does not underflow.
 
-  console.debug('the line that precedes line %d has length %d', currentLine.index,
-    previousLine.lead_whitespace.length + previousLine.open.length + previousLine.prefix.length +
-    previousLine.content.length);
-
   if (previousLine.lead_whitespace.length + previousLine.open.length + previousLine.prefix.length +
     previousLine.content.length >= context.max_line_length) {
-    console.debug('the line that precedes line %d is too long to underflow', currentLine.index);
     return;
   }
 
   // If the current line has no content then the previous line does not underflow
   if (currentLine.content.length === 0) {
-    console.debug('line %d has no content so line %d does not underflow', currentLine.index,
-      previousLine.index);
     return;
   }
 
   // TODO: these should be parsed as markup
 
   if (previousLine.index === 1 && /^(global|jslint|property)\s/.test(previousLine.content)) {
-    console.debug('line %d is global/jslint/property so underflow ignored', previousLine.index);
     return;
   }
 
   if (currentLine.markup.startsWith('*') || currentLine.markup.startsWith('-') ||
     /^\d/.test(currentLine.markup)) {
-    console.debug('line %d has markup and so previous line does not underflow', currentLine.index);
     return;
   }
 
   // TODO: markdown header should be parsed as markup
 
   if (/^#+/.test(currentLine.markup)) {
-    console.debug('line %d has header markup so previous line does not underflow',
-      currentLine.index);
     return;
   }
 
   if (currentLine.markup.startsWith('@')) {
-    console.debug('line %d has jsdoc so previous line does not underflow', currentLine.index);
     return;
   }
 
   if (/^\|.+\|$/.test(currentLine.content)) {
-    console.debug('line %d is has markdown table syntax so previous line does not underflow',
-      currentLine.index);
     return;
   }
 
   // TODO: todo and warn and so on should be parsed as markup
 
   if (/^todo\(?.+\)?\:|warn\:|hack\:/i.test(currentLine.content)) {
-    console.debug('line %d has todo syntax so previous line does not underflow', currentLine.index);
     return;
   }
 
-  // TODO: decide what text in the current line can be merged into the previous line, if any. I am
-  // not quite sure how to do this. We kind of need to gather this information first in the previous
-  // line and the logic needs to be identical. I think this means that the parsing has to happen in
-  // parseLine, not in checkBlockOverflow? What we want to avoid is merging the text from the
-  // current line into the previous line if it would then cause the previous line to overflow,
-  // because that would cause an infinite loop (well, it would hit the eslint limit of 10). We could
-  // try merging one word at a time from the current line into the previous provided that it fits
-  // but this seems pretty inefficient. What we need to do is find the greatest number of word
-  // tokens from the current line that can fit into the previous line. But in order to do that, we
-  // need to determine how much room remains in the previous line. It might be the case that no
-  // tokens fit at all.
-
-  // Find the breakpoint in the previous line.
+  // Find the breakpoint in the previous line. This tries to find a breaking space earlier in the
+  // line. If not found, then this is -1. However, -1 does not indicate that the content is at the
+  // threshold. -1 only means no earlier breakpoint found.
 
   const previousLineBreakpoint = findContentBreak(previousLine, context.max_line_length);
+
   let effectivePreviousLineBreakpoint;
   if (previousLineBreakpoint === -1) {
-    effectivePreviousLineBreakpoint = context.max_line_length;
+    // If we did not find an early breakpoint, then the effective breakpoint is the character at the
+    // end of the suffix.
+    effectivePreviousLineBreakpoint = Math.min(context.max_line_length,
+      previousLine.lead_whitespace.length + previousLine.open.length + previousLine.prefix.length +
+      previousLine.content.length + previousLine.suffix.length);
   } else {
-    // we add 1 so that we count the space that should exist between the previous content and the
-    // content merged in
-    effectivePreviousLineBreakpoint = previousLineBreakpoint + 1;
+    effectivePreviousLineBreakpoint = previousLineBreakpoint;
   }
 
-  // Check if the breakpoint in the previous line leaves room for additional content.
+  // Check if the effective breakpoint in the previous line leaves room for any amount of additional
+  // content. We add 1 to account for the extra space we will insert.
 
-  if (effectivePreviousLineBreakpoint >= context.max_line_length) {
-    console.debug('previous line %d breakpoint is too close to threshold to merge current line',
-      previousLine.index, currentLine.index);
+  if (effectivePreviousLineBreakpoint + 1 >= context.max_line_length) {
     return;
   }
 
-  // TODO: tokenize the current line, then find the greatest number of tokens that can fit into the
-  // space remaining in the previous line. for now do this in a sloppy way and do not worry about
-  // accurately preserving space.
+  // Split the current content into word and space tokens. We know the first token is a word because
+  // we know that content does not include leading whitespace and is not empty.
 
-  // TODO: we need to preserve the whitespace
-
-  const tokens = currentLine.content.split(/\s+/);
-
-  console.debug('line %d tokens', currentLine.index, tokens);
+  const tokens = tokenize(currentLine.content);
 
   let spaceRemaining = context.max_line_length - effectivePreviousLineBreakpoint;
-  console.debug('determined that there is %d space remaining in line', spaceRemaining,
-    previousLine.index);
-
   const fittingTokens = [];
   for (const token of tokens) {
     if (token.length < spaceRemaining) {
       fittingTokens.push(token);
-      // subtract 1 to account for the space we add
-      spaceRemaining = spaceRemaining - token.length - 1;
+      spaceRemaining -= token.length;
     } else {
       break;
     }
   }
 
   if (fittingTokens.length === 0) {
-    console.debug('no tokens in line %d fit into line %d', currentLine.index, previousLine.index);
     return;
   }
 
-  console.debug('line %d tokens that fit into prev:', currentLine.index, fittingTokens);
+  const tokenText = fittingTokens.join('');
 
-  // We know that one or more tokens of the current line fit into the previous line. Now we want
-  // to figure out the text we will be replacing.
+  // Compose the replacement text. We have to take into account whether we are merging the entire
+  // current line into the previous line because all tokens fit.
 
-  ///////////////////////////////////////////////////////////////////////////
-  // TODO: none of the following has been refactored to work with the new line parsing, or
-  // been corrected
+  let replacementText = ' ' + tokenText;
+  if (tokenText.length < currentLine.content.length) {
+    replacementText += '\n' + currentLine.lead_whitespace + currentLine.prefix;
+  }
 
-  // Underflow can only occur if the next line does not look like a JSDoc line. We try to run this
-  // regex last since it is expensive.
+  const rangeStart = context.code.getIndexFromLoc({
+    line: previousLine.index,
+    column: previousLine.lead_whitespace.length + previousLine.open.length +
+      previousLine.prefix.length + previousLine.content.length
+  });
 
-  // Compute the position of the start of the current line in the whole file. The +1 is the length
-  // of the line break (which might be wrong right now).
+  const rangeEnd = context.code.getIndexFromLoc({
+    line: currentLine.index,
+    column: currentLine.lead_whitespace.length + currentLine.prefix.length +
+    tokenText.length
+  });
 
-  // let lineRangeStart = context.comment.range[0];
-  // for (let lineCursor = context.comment.loc.start.line; lineCursor < currentLine.index; lineCursor++) {
-  //   lineRangeStart += context.code.lines[lineCursor - 1].length + 1;
-  // }
+  const replacementRange: eslint.AST.Range = [rangeStart, rangeEnd];
 
-  // const report: eslint.Rule.ReportDescriptor = {
-  //   node: context.node,
-  //   loc: context.comment.loc,
-  //   messageId: 'underflow',
-  //   data: {
-  //     line_length: `${currentLine.text.length}`,
-  //     max_length: `${context.max_line_length}`
-  //   },
-  //   fix: function (fixer) {
-  //     const adjustment = edge === -1 ? 2 : 3;
-  //     const range: eslint.AST.Range = [
-  //       lineRangeStart + context.code.lines[currentLine.index - 1].length,
-  //       lineRangeStart + context.code.lines[currentLine.index - 1].length + 1 +
-  //         context.code.lines[currentLine.index].indexOf('*') + adjustment
-  //     ];
+  const report: eslint.Rule.ReportDescriptor = {
+    node: context.node,
+    loc: {
+      start: {
+        line: previousLine.index,
+        column: 0
+      },
+      end: {
+        line: currentLine.index,
+        column: currentLine.text.length
+      }
+    },
+    messageId: 'underflow',
+    data: {
+      line_length: `${currentLine.text.length}`,
+      max_length: `${context.max_line_length}`
+    },
+    fix: function (fixer) {
+      return fixer.replaceTextRange(replacementRange, replacementText);
+    }
+  };
 
-  //     return fixer.replaceTextRange(range, ' ');
-  //   }
-  // };
+  return report;
+}
 
-  // return report;
+/**
+ * Split a string into tokens. Returns an array of strings that contains both word tokens and
+ * whitespace tokens in order of appearance.
+ */
+export function tokenize(string: string) {
+  const matches = string.matchAll(/\S+|\s+/g);
+  const tokens: string[] = [];
 
-  // TEMP: doing this while in refactor to shutup eslint for a bit
+  for (const match of matches) {
+    tokens.push(match[0]);
+  }
 
-  return <eslint.Rule.ReportDescriptor>null;
+  return tokens;
 }

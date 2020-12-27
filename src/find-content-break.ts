@@ -8,6 +8,7 @@ import { CommentLineDesc } from './comment-line-desc';
  */
 export function findContentBreak(line: CommentLineDesc, maxLineLength: number) {
   // Find nothing when the content is in bounds.
+  // TODO: what about suffix here? we sometimes want to count it and sometimes not?
 
   if (line.lead_whitespace.length + line.open.length + line.prefix.length +
     line.content.length <= maxLineLength) {
