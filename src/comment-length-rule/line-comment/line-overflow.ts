@@ -4,34 +4,41 @@ import { CommentLineDesc } from '../comment-line-desc';
 import { findContentBreak } from '../find-content-break';
 
 export function checkLineOverflow(context: CommentContext, line: CommentLineDesc) {
-  // If the entire line, including whitespace, is less than the length then not overflow.
+  // If the entire line, including trailing whitespace in case the trailing whitespace rule is off,
+  // is less than the threshold then do not detect overflow.
 
   if (line.text.length <= context.max_line_length) {
     return;
   }
 
-  // If the comment only starts after the threshold, then ignore.
+  // If the comment's opening starts after the threshold then do not detect overflow.
 
   if (line.lead_whitespace.length >= context.max_line_length) {
     return;
   }
 
-  // If the content only starts after the threshold, then ignore.
+  // If the comment's prefix starts after the threshold then do not detect overflow.
+
+  if (line.lead_whitespace.length + line.open.length >= context.max_line_length) {
+    return;
+  }
+
+  // If the comment's content starts after the threshold then do not detect overflow.
 
   if (line.lead_whitespace.length + line.open.length + line.prefix.length >=
     context.max_line_length) {
     return;
   }
 
-  // If the length of the line excluding the trailing whitespace is under the threshold then
-  // ignore.
+  // If the length of the line up to the end of the content, which excludes trailing whitespace, is
+  // under the threshold then do not detect overflow.
 
   if (line.lead_whitespace.length + line.open.length + line.prefix.length + line.content.length <=
     context.max_line_length) {
     return;
   }
 
-  // if there is a comment directive then never overflow
+  // If there is a comment directive then never overflow
 
   if (line.content.startsWith('eslint-')) {
     return;
