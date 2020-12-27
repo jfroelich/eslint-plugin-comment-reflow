@@ -5,7 +5,7 @@
   "scripts": {
     "prepack": "rm -rf dist && tsc -w false",
     "tsc": "tsc -w true",
-    "lint": "eslint --ext ts src/* --fix"
+    "fix": "eslint --ext ts src/* --fix"
   },
   "eslintConfig": {
     "parser": "@typescript-eslint/parser",
