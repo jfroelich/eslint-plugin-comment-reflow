@@ -1,4 +1,4 @@
-import { CommentLineDesc } from './comment-line-desc';
+import { CommentLineDesc } from '../comment-line-desc';
 
 /**
  * Return the position where to break the text or -1. This only searches in a subregion of the text
