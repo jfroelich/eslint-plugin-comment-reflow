@@ -1,224 +1,189 @@
 import eslint from 'eslint';
 import { CommentContext } from './comment-context';
 import { CommentLineDesc } from './comment-line-desc';
+import { findContentBreak } from './find-content-break';
 
-export function checkBlockUnderflow(context: CommentContext, line: CommentLineDesc) {
-  // Grab the text of the current line. Since the line number is 1-based, but the lines array is
-  // 0-based, we must substract one. Do not confuse the value of the line with the comment's value.
-  // Also, it looks like ESLint splits by line break to generate the lines array so each line does
-  // not include surrounding line breaks so keep in mind that the length of each line is not its
-  // actual length. In the case of a block comment, ESLint does not remove leading asterisks, which
-  // is different behavior than single line comments, so also watch out for that.
-
-  const text = line.text;
-
-  // Check if we are transitioning into a preformatted section or out of one. The block overflow
-  // function manages the state transition. We just need to know to ignore.
-
+export function checkBlockUnderflow(context: CommentContext, previousLine: CommentLineDesc,
+  currentLine: CommentLineDesc) {
+  console.debug('analyzing current line %d', currentLine.index);
   if (context.in_md_fence || context.in_jsdoc_example) {
     return;
   }
 
-  // The current line of a block comment can only underflow when there is a subsequent line. If the
-  // current line is the final line of the comment then there is no subsequent line and so the
-  // current line cannot underflow.
+  // If the length of the content of the previous line is 0 then it represents a paragraph break
+  // and should not be considered underflow.
+  // TODO: what about a line that appears empty but is actually whitespace?
 
-  if (line.index === context.comment.loc.end.line) {
+  if (previousLine.content.length === 0) {
+    console.debug('the line that precedes line %d is empty and therefore does not underflow',
+      currentLine.index);
     return;
   }
 
-  // TODO: this work is redundant with the work done in the block overflow. I think we need to
-  // promote the logic into a shared state.
+  // If the length of the previous line is greater than or equal to the threshold then the previous
+  // line does not underflow.
 
-  const textTrimmedStart = text.trimStart();
+  console.debug('the line that precedes line %d has length %d', currentLine.index,
+    previousLine.lead_whitespace.length + previousLine.open.length + previousLine.prefix.length +
+    previousLine.content.length);
 
-  let prefix = '';
-  if (line.index === context.comment.loc.start.line) {
-    const matches = /\/\*\*?\s*/.exec(textTrimmedStart);
-    if (matches && matches.length === 1) {
-      prefix = matches[0];
+  if (previousLine.lead_whitespace.length + previousLine.open.length + previousLine.prefix.length +
+    previousLine.content.length >= context.max_line_length) {
+    console.debug('the line that precedes line %d is too long to underflow', currentLine.index);
+    return;
+  }
+
+  // If the current line has no content then the previous line does not underflow
+  if (currentLine.content.length === 0) {
+    console.debug('line %d has no content so line %d does not underflow', currentLine.index,
+      previousLine.index);
+    return;
+  }
+
+  // TODO: these should be parsed as markup
+
+  if (previousLine.index === 1 && /^(global|jslint|property)\s/.test(previousLine.content)) {
+    console.debug('line %d is global/jslint/property so underflow ignored', previousLine.index);
+    return;
+  }
+
+  if (currentLine.markup.startsWith('*') || currentLine.markup.startsWith('-') ||
+    /^\d/.test(currentLine.markup)) {
+    console.debug('line %d has markup and so previous line does not underflow', currentLine.index);
+    return;
+  }
+
+  // TODO: markdown header should be parsed as markup
+
+  if (/^#+/.test(currentLine.markup)) {
+    console.debug('line %d has header markup so previous line does not underflow',
+      currentLine.index);
+    return;
+  }
+
+  if (currentLine.markup.startsWith('@')) {
+    console.debug('line %d has jsdoc so previous line does not underflow', currentLine.index);
+    return;
+  }
+
+  if (/^\|.+\|$/.test(currentLine.content)) {
+    console.debug('line %d is has markdown table syntax so previous line does not underflow',
+      currentLine.index);
+    return;
+  }
+
+  // TODO: todo and warn and so on should be parsed as markup
+
+  if (/^todo\(?.+\)?\:|warn\:|hack\:/i.test(currentLine.content)) {
+    console.debug('line %d has todo syntax so previous line does not underflow', currentLine.index);
+    return;
+  }
+
+  // TODO: decide what text in the current line can be merged into the previous line, if any. I am
+  // not quite sure how to do this. We kind of need to gather this information first in the previous
+  // line and the logic needs to be identical. I think this means that the parsing has to happen in
+  // parseLine, not in checkBlockOverflow? What we want to avoid is merging the text from the
+  // current line into the previous line if it would then cause the previous line to overflow,
+  // because that would cause an infinite loop (well, it would hit the eslint limit of 10). We could
+  // try merging one word at a time from the current line into the previous provided that it fits
+  // but this seems pretty inefficient. What we need to do is find the greatest number of word
+  // tokens from the current line that can fit into the previous line. But in order to do that, we
+  // need to determine how much room remains in the previous line. It might be the case that no
+  // tokens fit at all.
+
+  // Find the breakpoint in the previous line.
+
+  const previousLineBreakpoint = findContentBreak(previousLine, context.max_line_length);
+  let effectivePreviousLineBreakpoint;
+  if (previousLineBreakpoint === -1) {
+    effectivePreviousLineBreakpoint = context.max_line_length;
+  } else {
+    // we add 1 so that we count the space that should exist between the previous content and the
+    // content merged in
+    effectivePreviousLineBreakpoint = previousLineBreakpoint + 1;
+  }
+
+  // Check if the breakpoint in the previous line leaves room for additional content.
+
+  if (effectivePreviousLineBreakpoint >= context.max_line_length) {
+    console.debug('previous line %d breakpoint is too close to threshold to merge current line',
+      previousLine.index, currentLine.index);
+    return;
+  }
+
+  // TODO: tokenize the current line, then find the greatest number of tokens that can fit into the
+  // space remaining in the previous line. for now do this in a sloppy way and do not worry about
+  // accurately preserving space.
+
+  // TODO: we need to preserve the whitespace
+
+  const tokens = currentLine.content.split(/\s+/);
+
+  console.debug('line %d tokens', currentLine.index, tokens);
+
+  let spaceRemaining = context.max_line_length - effectivePreviousLineBreakpoint;
+  console.debug('determined that there is %d space remaining in line', spaceRemaining,
+    previousLine.index);
+
+  const fittingTokens = [];
+  for (const token of tokens) {
+    if (token.length < spaceRemaining) {
+      fittingTokens.push(token);
+      // subtract 1 to account for the space we add
+      spaceRemaining = spaceRemaining - token.length - 1;
+    } else {
+      break;
     }
-  } else {
-    const matches = /\*\s*/.exec(textTrimmedStart);
-    if (matches && matches.length === 1) {
-      prefix = matches[0];
-    }
   }
 
-  let content = '';
-  if (line.index === context.comment.loc.end.line) {
-    content = textTrimmedStart.slice(prefix.length, -2);
-  } else {
-    content = textTrimmedStart.slice(prefix.length);
-  }
-
-  const lengthOfWhiteSpacePrecedingComment = text.length - textTrimmedStart.length;
-
-  const contentTrimmedEnd = content.trimEnd();
-
-  // If the length of the trimmed text of the current line is greater than or equal to the maximum
-  // line length then this is not overflow.
-
-  if ((lengthOfWhiteSpacePrecedingComment + prefix.length + contentTrimmedEnd.length) >=
-    context.max_line_length) {
+  if (fittingTokens.length === 0) {
+    console.debug('no tokens in line %d fit into line %d', currentLine.index, previousLine.index);
     return;
   }
 
-  // ESLint stripped the line break character(s) from the text. When we consider the length of the
-  // line, we have to consider its line break. If the final character is the line break, then we
-  // actually want 1 before the threshold. Here we are using 1 for line feed, assuming no carriage
-  // return for now. I could merge this with the previous condition but I want to keep it clear for
-  // now.
+  console.debug('line %d tokens that fit into prev:', currentLine.index, fittingTokens);
 
-  // TODO: this is wrong
+  // We know that one or more tokens of the current line fit into the previous line. Now we want
+  // to figure out the text we will be replacing.
 
-  // if (text.length + 1 === context.max_line_length) {
-  //   return;
-  // }
-
-  // Underflow can only occur if there is content on the current line of the comment. If the line is
-  // the initial line of the block comment and does not contain content, or some intermediate
-  // line that does not contain content, then do not consider it to underflow.
-
-  const trimmedText = text.trim();
-  if (trimmedText === '/*' || trimmedText === '/**' || trimmedText === '*' || trimmedText === '') {
-    return;
-  }
-
-  // Special handling for jslint directives. According to the docs, the directives can only be
-  // specified correctly on the first line of the file, and there cannot be a space between the
-  // asterisk and the directive word. In this case the directive itself should not be deemed to
-  // underflow.
-
-  if (line.index === 1 && /^\/\*(global|jslint|property)/.test(text)) {
-    return;
-  }
-
-  // If we are not fenced, and the current line is the fence terminator, then the current line
-  // should not be considered underflow.
-  if (trimmedText.startsWith('* ```')) {
-    return;
-  }
-
-  // Get the value of the next line. line is 1-based, so the next line is simply at "line".
-
-  let next = context.code.lines[line.index];
-  next = next.trim();
-
-  // Underflow can only occur if the next line has some content that we would want to merge into the
-  // current line. If the next line is empty, then the author has created paragraphs, and we want to
-  // not merge paragraphs, only sentences. If the next line looks like the last line and does not
-  // have content, then we want to keep that extra line, because of the javadoc comment style.
-  // We know that there is a next line because we previously checked that the current line is not
-  // the final line.
-
-  if (next === '*' || next == '*/' || next === '') {
-    return;
-  }
-
-  // Check if the next line contains markdown list syntax.
-
-  if (next.startsWith('* * ') || next.startsWith('* - ') || /^\*\s\d+\.\s/.test(next)) {
-    return;
-  }
-
-  // Check for markdown header syntax.
-
-  if (/^\*\s#{1,6}/.test(next)) {
-    return;
-  }
-
-  // Check for markdown table syntax.
-
-  if (next.startsWith('* |') && next.endsWith('|')) {
-    return;
-  }
-
-  // Check for markdown fence syntax
-
-  if (next.startsWith('* ```')) {
-    return;
-  }
-
-  // Check for TODO like comments
-  if (next.startsWith('* TODO:')) {
-    return;
-  }
-
-  if (next.startsWith('* WARN:')) {
-    return;
-  }
-
-  if (next.startsWith('* HACK:')) {
-    return;
-  }
-
-  if (next.startsWith('* TODO(')) {
-    return;
-  }
-
-  // Search for the first intermediate whitespace in the next line. Since the '*' stuff is embedded
-  // in the text, we have to skip over that, and we have to skip over the initial space that
-  // sometimes follows it.
-
-  let edge = -1;
-  if (next.startsWith('* ')) {
-    edge = next.indexOf(' ', 3);
-  } else if (next.startsWith('*')) {
-    edge = next.indexOf(' ', 2);
-  } else {
-    edge = next.indexOf(' ');
-  }
-
-  // If there is no space in the next line, and merging the entire next line with the current line
-  // would cause the current line to overflow, then the current line is not underflowing.
-
-  if (edge === -1 && next.length + text.length > context.max_line_length) {
-    return;
-  }
-
-  // If there is a space in the next line, and merging the text leading up to the space with the
-  // current line would cause the current line to overflow, then the current line is not
-  // underflowing.
-
-  if (edge !== -1 && edge + text.length > context.max_line_length) {
-    return;
-  }
+  ///////////////////////////////////////////////////////////////////////////
+  // TODO: none of the following has been refactored to work with the new line parsing, or
+  // been corrected
 
   // Underflow can only occur if the next line does not look like a JSDoc line. We try to run this
   // regex last since it is expensive.
 
-  if (/^\s*\*\s+@[a-zA-Z]+/.test(next)) {
-    return;
-  }
-
   // Compute the position of the start of the current line in the whole file. The +1 is the length
   // of the line break (which might be wrong right now).
 
-  let lineRangeStart = context.comment.range[0];
-  for (let lineCursor = context.comment.loc.start.line; lineCursor < line.index; lineCursor++) {
-    lineRangeStart += context.code.lines[lineCursor - 1].length + 1;
-  }
+  // let lineRangeStart = context.comment.range[0];
+  // for (let lineCursor = context.comment.loc.start.line; lineCursor < currentLine.index; lineCursor++) {
+  //   lineRangeStart += context.code.lines[lineCursor - 1].length + 1;
+  // }
 
-  const report: eslint.Rule.ReportDescriptor = {
-    node: context.node,
-    loc: context.comment.loc,
-    messageId: 'underflow',
-    data: {
-      line_length: `${text.length}`,
-      max_length: `${context.max_line_length}`
-    },
-    fix: function (fixer) {
-      const adjustment = edge === -1 ? 2 : 3;
-      const range: eslint.AST.Range = [
-        lineRangeStart + context.code.lines[line.index - 1].length,
-        lineRangeStart + context.code.lines[line.index - 1].length + 1 +
-          context.code.lines[line.index].indexOf('*') + adjustment
-      ];
+  // const report: eslint.Rule.ReportDescriptor = {
+  //   node: context.node,
+  //   loc: context.comment.loc,
+  //   messageId: 'underflow',
+  //   data: {
+  //     line_length: `${currentLine.text.length}`,
+  //     max_length: `${context.max_line_length}`
+  //   },
+  //   fix: function (fixer) {
+  //     const adjustment = edge === -1 ? 2 : 3;
+  //     const range: eslint.AST.Range = [
+  //       lineRangeStart + context.code.lines[currentLine.index - 1].length,
+  //       lineRangeStart + context.code.lines[currentLine.index - 1].length + 1 +
+  //         context.code.lines[currentLine.index].indexOf('*') + adjustment
+  //     ];
 
-      return fixer.replaceTextRange(range, ' ');
-    }
-  };
+  //     return fixer.replaceTextRange(range, ' ');
+  //   }
+  // };
 
-  return report;
+  // return report;
+
+  // TEMP: doing this while in refactor to shutup eslint for a bit
+
+  return <eslint.Rule.ReportDescriptor>null;
 }
