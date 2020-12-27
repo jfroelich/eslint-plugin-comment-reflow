@@ -2,6 +2,7 @@ import eslint from 'eslint';
 import { CommentContext } from '../comment-context';
 import { CommentLineDesc } from '../comment-line-desc';
 import { findContentBreak } from './find-content-break';
+import { tokenize } from './tokenize';
 
 export function checkBlockUnderflow(context: CommentContext, previousLine: CommentLineDesc,
   currentLine: CommentLineDesc) {
@@ -152,19 +153,4 @@ export function checkBlockUnderflow(context: CommentContext, previousLine: Comme
   };
 
   return report;
-}
-
-/**
- * Split a string into tokens. Returns an array of strings that contains both word tokens and
- * whitespace tokens in order of appearance.
- */
-export function tokenize(string: string) {
-  const matches = string.matchAll(/\S+|\s+/g);
-  const tokens: string[] = [];
-
-  for (const match of matches) {
-    tokens.push(match[0]);
-  }
-
-  return tokens;
 }
