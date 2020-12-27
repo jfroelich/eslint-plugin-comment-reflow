@@ -3,7 +3,9 @@ import eslint from 'eslint';
 import estree from 'estree';
 import { checkBlockComment } from './block-comment/block-comment';
 import { CommentContext } from './comment-context';
+import { CommentLineDesc } from './comment-line-desc';
 import { checkLineComment } from './line-comment/line-comment';
+import { parseLine } from './parse-line';
 
 export const commentLengthRule: eslint.Rule.RuleModule = {
   meta: {
@@ -19,7 +21,7 @@ export const commentLengthRule: eslint.Rule.RuleModule = {
 
 function createCommentLengthRule(context: eslint.Rule.RuleContext) {
   return {
-    Program: function(node: estree.Node) {
+    Program(node: estree.Node) {
       return analyzeProgram(context, node);
     }
   };
@@ -35,6 +37,8 @@ function analyzeProgram(context: eslint.Rule.RuleContext, node: estree.Node) {
 
   const code = context.getSourceCode();
   const comments = code.getAllComments();
+  let previousSingleCommentContext: CommentContext;
+  let previousSingleLine: CommentLineDesc;
 
   for (let index = 0; index < comments.length; index++) {
     const commentContext: CommentContext = {
@@ -45,14 +49,25 @@ function analyzeProgram(context: eslint.Rule.RuleContext, node: estree.Node) {
       comment_index: index
     };
 
-    let report = checkBlockComment(commentContext);
-    if (report) {
-      return context.report(report);
-    }
+    if (commentContext.comment.type === 'Block') {
+      const blockReport = checkBlockComment(commentContext);
+      if (blockReport) {
+        return context.report(blockReport);
+      }
+    } else if (commentContext.comment.type === 'Line') {
+      const currentLine = parseLine(commentContext.code, commentContext.comment,
+        commentContext.comment.loc.start.line);
 
-    report = checkLineComment(commentContext);
-    if (report) {
-      return context.report(report);
+      const singleLineReport = checkLineComment(previousSingleCommentContext, previousSingleLine,
+        commentContext, currentLine);
+      if (singleLineReport) {
+        return context.report(singleLineReport);
+      }
+
+      previousSingleCommentContext = commentContext;
+      previousSingleLine = currentLine;
+    } else {
+      // ignore shebang
     }
   }
 }

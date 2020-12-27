@@ -3,7 +3,8 @@ import eslint from 'eslint';
 import { CommentContext } from '../comment-context';
 import { CommentLineDesc } from '../comment-line-desc';
 
-export function checkLineUnderflow(context: CommentContext, line: CommentLineDesc) {
+export function checkLineUnderflow(previousContext: CommentContext, previousLine: CommentLineDesc,
+  currentContext: CommentContext, line: CommentLineDesc) {
   // Get the text of the line. Do not confuse this with comment value. line is 1 based so we
   // subtract 1 to get the line in the lines array.
 
@@ -11,21 +12,21 @@ export function checkLineUnderflow(context: CommentContext, line: CommentLineDes
 
   // The comment line only underflows when it is less than the maximum line length.
 
-  if (text.length >= context.max_line_length) {
+  if (text.length >= currentContext.max_line_length) {
     return;
   }
 
   // We must consider that eslint stripped out the line break from the text. Therefore, if we count
   // the line break character itself, and we are right at the threshold, this is not underflow.
 
-  if (text.length + 1 === context.max_line_length) {
+  if (text.length + 1 === currentContext.max_line_length) {
     return;
   }
 
   // For a single line comment line to underflow, it cannot be the final comment in the file.
 
-  const comments = context.code.getAllComments();
-  if (context.comment_index + 1 === comments.length) {
+  const comments = currentContext.code.getAllComments();
+  if (currentContext.comment_index + 1 === comments.length) {
     return;
   }
 
@@ -62,7 +63,7 @@ export function checkLineUnderflow(context: CommentContext, line: CommentLineDes
 
   // We know this comment is not the final comment. Examine the next comment.
 
-  const next = comments[context.comment_index + 1];
+  const next = comments[currentContext.comment_index + 1];
 
   // For a single line comment line to underflow, there must be a subsequent single line comment
   // line. The comments array contains block and single line comments mixed together. If the next
@@ -85,7 +86,7 @@ export function checkLineUnderflow(context: CommentContext, line: CommentLineDes
 
   // Get the text of the next comment line. Line is offset-1, so we just get the text at line.
 
-  const nextCommentLineText = context.code.lines[line.index];
+  const nextCommentLineText = currentContext.code.lines[line.index];
 
   // Find where the comment starts. We cannot assume the comment is at the start of the line as it
   // could be a trailing comment. We search from the left because we want the first set of slashes,
@@ -172,7 +173,7 @@ export function checkLineUnderflow(context: CommentContext, line: CommentLineDes
   // line. If the sum of the two is greater than the total preferred text length per line, then we
   // treat the current line as not underflowing.
 
-  if (edge === -1 && nextContent.length + text.length > context.max_line_length) {
+  if (edge === -1 && nextContent.length + text.length > currentContext.max_line_length) {
     return;
   }
 
@@ -180,25 +181,25 @@ export function checkLineUnderflow(context: CommentContext, line: CommentLineDes
   // to the current line text. If shifting the characters would cause the current line to overflow,
   // then the current line is not considered underflow.
 
-  if (edge !== -1 && edge + text.length > context.max_line_length) {
+  if (edge !== -1 && edge + text.length > currentContext.max_line_length) {
     return;
   }
 
   const report: eslint.Rule.ReportDescriptor = {
-    node: context.node,
-    loc: context.comment.loc,
+    node: currentContext.node,
+    loc: currentContext.comment.loc,
     messageId: 'underflow',
     data: {
       line_length: `${text.length}`,
-      max_length: `${context.max_line_length}`
+      max_length: `${currentContext.max_line_length}`
     },
     fix: function (fixer) {
       const adjustment = edge === -1 ? 2 : 3;
       const range: eslint.AST.Range = [
         // TODO: this feels wrong, this assumes comment starts at start of line?
-        context.comment.range[0] + context.code.lines[line.index - 1].length,
-        context.comment.range[0] + context.code.lines[line.index - 1].length + 1 +
-          context.code.lines[line.index].indexOf('//') + adjustment
+        currentContext.comment.range[0] + currentContext.code.lines[line.index - 1].length,
+        currentContext.comment.range[0] + currentContext.code.lines[line.index - 1].length + 1 +
+          currentContext.code.lines[line.index].indexOf('//') + adjustment
       ];
 
       return fixer.replaceTextRange(range, ' ');

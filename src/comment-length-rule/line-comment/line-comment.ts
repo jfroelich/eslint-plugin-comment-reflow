@@ -1,19 +1,23 @@
+import assert from 'assert';
 import { CommentContext } from '../comment-context';
-import { parseLine } from "../parse-line";
+import { CommentLineDesc } from '../comment-line-desc';
 import { checkLineOverflow } from './line-overflow';
 import { checkLineUnderflow } from './line-underflow';
 
-export function checkLineComment(context: CommentContext) {
-  if (context.comment.type !== 'Line') {
-    return;
+export function checkLineComment(previousContext: CommentContext, previousLine: CommentLineDesc,
+  currentContext: CommentContext, currentLine: CommentLineDesc) {
+  assert(currentContext.comment.type === 'Line', `Line ${currentLine.index} is not type "Line"`);
+
+  const overflowReport = checkLineOverflow(currentContext, currentLine);
+  if (overflowReport) {
+    return overflowReport;
   }
 
-  const line = parseLine(context.code, context.comment, context.comment.loc.start.line);
-
-  const report = checkLineOverflow(context, line);
-  if (report) {
-    return report;
+  if (previousContext) {
+    const underflowReport = checkLineUnderflow(previousContext, previousLine, currentContext,
+      currentLine);
+    if (underflowReport) {
+      return underflowReport;
+    }
   }
-
-  return checkLineUnderflow(context, line);
 }

@@ -1,10 +1,8 @@
-import { CommentLineDesc } from '../comment-line-desc';
+import { CommentLineDesc } from './comment-line-desc';
 
 /**
  * Return the position where to break the text or -1. This only searches in a subregion of the text
  * so as to not match whitespace in other places.
- *
- * @todo can/should this be generalized to use in the Line comment algorithms?
  */
 export function findContentBreak(line: CommentLineDesc, maxLineLength: number) {
   // Find nothing when the content is in bounds.
