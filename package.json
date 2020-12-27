@@ -40,6 +40,10 @@
       "@typescript-eslint/explicit-module-boundary-types": "off",
       "no-trailing-spaces": [
         "error"
+      ],
+      "eol-last": [
+        "error",
+        "always"
       ]
     }
   },
