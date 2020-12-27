@@ -10,8 +10,8 @@ export const commentLengthRule: eslint.Rule.RuleModule = {
     type: 'layout',
     fixable: 'whitespace',
     messages: {
-      overflow: 'Comment overflows',
-      underflow: 'Comment underflows'
+      overflow: 'Comment line overflows',
+      underflow: 'Comment line underflows'
     }
   },
   create: createCommentLengthRule
