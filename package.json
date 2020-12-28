@@ -27,6 +27,10 @@
       "@typescript-eslint"
     ],
     "rules": {
+      "semi": [
+        "error",
+        "always"
+      ],
       "no-multiple-empty-lines": [
         "error",
         {
