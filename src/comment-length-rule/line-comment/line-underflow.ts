@@ -45,33 +45,15 @@ export function checkLineUnderflow(context: CommentContext, previousLine: Commen
     return;
   }
 
-  if (previousLine.content.startsWith('eslint-')) {
+  if (previousLine.directive.length > 0) {
     return;
   }
 
-  if (previousLine.content.startsWith('@ts-')) {
+  if (currentLine.directive.length > 0) {
     return;
   }
 
-  if (previousLine.content.startsWith('tslint:')) {
-    return;
-  }
-
-  if (/^\/\s<(reference|amd)/.test(previousLine.content)) {
-    return;
-  }
-
-  if (currentLine.content.startsWith('eslint-')) {
-    return;
-  }
-
-  if (currentLine.content.startsWith('@ts-')) {
-    return;
-  }
-
-  if (currentLine.content.startsWith('tslint:')) {
-    return;
-  }
+  // TODO: BUG, XXX, FIXME, WARNING, FIXME
 
   if (currentLine.content.startsWith('TODO:')) {
     return;
