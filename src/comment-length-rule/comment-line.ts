@@ -31,11 +31,11 @@ export interface CommentLine {
   text: string;
 
   /**
-   * @todo i've confused myself here, does prefix include the open? i don't think it should.
-   *
-   * The slash and asterisk(s) along with immediately subsequent whitespace of a comment line. This
-   * may be an empty string for non-javadoc comments. This does not include the whitespace
-   * preceding the slash and/or asterisk(s).
+   * The characters between the comment open and the start of the content. For example, for a single
+   * line comment, this is the whitespace following the slashes and before the text. For a javadoc
+   * formatted comment line in the middle of the comment, this might include a leading asterisk
+   * followed by some whitespace. For the first line of a javadoc comment, this will include the
+   * second asterisk as its first character.
    */
   prefix: string;
 
