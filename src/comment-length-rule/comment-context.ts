@@ -12,9 +12,6 @@ export interface CommentContext {
   /** The comment node from the ESLint AST. */
   comment: estree.Comment;
 
-  /** The index of the comment in the comments array. 0 based. */
-  comment_index: number;
-
   /** The rule config for the desired maximum number of characters per line. */
   max_line_length: number;
 

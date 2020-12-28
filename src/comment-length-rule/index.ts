@@ -39,13 +39,12 @@ function analyzeProgram(context: eslint.Rule.RuleContext, node: estree.Node) {
   const comments = code.getAllComments();
   let previousLine: CommentLine;
 
-  for (let index = 0; index < comments.length; index++) {
+  for (const comment of comments) {
     const commentContext: CommentContext = {
       node,
       code,
-      comment: comments[index],
-      max_line_length: maxLineLength,
-      comment_index: index
+      comment,
+      max_line_length: maxLineLength
     };
 
     if (commentContext.comment.type === 'Block') {
