@@ -1,6 +1,6 @@
 import eslint from 'eslint';
 import { CommentContext } from '../comment-context';
-import { CommentLine, getContentLengthInclusive, getPrefixLengthInclusive, getSuffixLengthInclusive } from '../comment-line';
+import { CommentLine, getRegionLength } from '../comment-line';
 import { tokenize } from '../tokenize';
 
 /**
@@ -40,7 +40,7 @@ export function checkLineUnderflow(context: CommentContext, previousLine: Commen
   // it looks like two lines should be merged, but they should not be, because of the suffix. I
   // myself keep screwing this up thinking there is an error, but this is not an error.
 
-  if (getSuffixLengthInclusive(previousLine) >= context.max_line_length) {
+  if (getRegionLength(previousLine, 'suffix') >= context.max_line_length) {
     return;
   }
 
@@ -88,7 +88,7 @@ export function checkLineUnderflow(context: CommentContext, previousLine: Commen
     return;
   }
 
-  const previousLineEndPosition = getSuffixLengthInclusive(previousLine);
+  const previousLineEndPosition = getRegionLength(previousLine, 'suffix');
 
   // Check if the ending position in the previous line leaves room for any amount of additional
   // content. We add 1 to account for the extra space we will insert.
@@ -164,12 +164,12 @@ export function checkLineUnderflow(context: CommentContext, previousLine: Commen
 
   const rangeStart = context.code.getIndexFromLoc({
     line: previousLine.index,
-    column: getContentLengthInclusive(previousLine)
+    column: getRegionLength(previousLine, 'content')
   });
 
   const rangeEnd = context.code.getIndexFromLoc({
     line: currentLine.index,
-    column: getPrefixLengthInclusive(currentLine) + tokenText.length + whitespaceExtensionLength
+    column: getRegionLength(currentLine, 'prefix') + tokenText.length + whitespaceExtensionLength
   });
 
   const replacementRange: eslint.AST.Range = [rangeStart, rangeEnd];
