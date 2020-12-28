@@ -45,6 +45,7 @@
     "node_modules": true,
     "tsconfig.json": true,
     "package-lock.json": true,
-    "readme.md": true
+    "readme.md": true,
+    "LICENSE": true
   }
 }
