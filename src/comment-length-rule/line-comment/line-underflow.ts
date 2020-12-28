@@ -1,7 +1,6 @@
 import eslint from 'eslint';
 import { CommentContext } from '../comment-context';
 import { CommentLineDesc } from '../comment-line-desc';
-import { findContentBreak } from '../find-content-break';
 import { tokenize } from '../tokenize';
 
 /**
@@ -14,8 +13,6 @@ import { tokenize } from '../tokenize';
  */
 export function checkLineUnderflow(context: CommentContext, previousLine: CommentLineDesc,
   currentLine: CommentLineDesc) {
-  console.debug('previous line %d current line %d', previousLine.index, currentLine.index);
-
   // If the previous line is not immediately preceding the current line then we do not consider
   // underflow. This can happen because the caller passes in any previous line comment, not only the
   // immediately previous line comment.
@@ -26,23 +23,21 @@ export function checkLineUnderflow(context: CommentContext, previousLine: Commen
 
   // If either line has no content then do not consider underflow.
 
-  // TODO: there is a bug, parseLine is not finding content for single lines
-
   if (previousLine.content.length === 0 || currentLine.content.length === 0) {
-    console.debug('line %d content "%s"', previousLine.index, previousLine.content);
-    console.debug('line %d content "%s"', currentLine.index, currentLine.content);
-
-    console.debug('either line %d or line %d has no content', previousLine.index,
-      currentLine.index);
     return;
   }
 
   // If the length of the previous line is greater than or equal to the threshold then the previous
-  // line does not underflow.
+  // line does not underflow. Note that here we count the suffix, which is the trailing whitespace.
+  // It is ambiguous whether trailing whitespace is deemed content. Perhaps there should be a config
+  // option. For now, to be safe, we assume that if the author wants to leave in trailing whitespace
+  // that it is intentional and part of the content and that if they wanted to avoid this problem
+  // they would use the no-trailing-spaces rule. Keep in mind this can lead to strange things, where
+  // it looks like two lines should be merged, but they should not be, because of the suffix. I
+  // myself keep screwing this up thinking there is an error, but this is not an error.
 
   if (previousLine.lead_whitespace.length + previousLine.open.length + previousLine.prefix.length +
     previousLine.content.length + previousLine.suffix.length >= context.max_line_length) {
-    console.debug('the line preceding line %d has no room', currentLine.index);
     return;
   }
 
@@ -90,29 +85,13 @@ export function checkLineUnderflow(context: CommentContext, previousLine: Commen
     return;
   }
 
-  console.debug('finding breakpoint in line preceding line %d', currentLine.index);
+  const previousLineEndPosition = previousLine.lead_whitespace.length + previousLine.open.length +
+    previousLine.prefix.length + previousLine.content.length + previousLine.suffix.length;
 
-  // Find the breakpoint in the previous line. This tries to find a breaking space earlier in the
-  // line. If not found, then this is -1. However, -1 does not indicate that the content is at the
-  // threshold. -1 only means no earlier breakpoint found.
-
-  const previousLineBreakpoint = findContentBreak(previousLine, context.max_line_length);
-
-  let effectivePreviousLineBreakpoint;
-  if (previousLineBreakpoint === -1) {
-    // If we did not find an early breakpoint, then the effective breakpoint is the character at the
-    // end of the suffix.
-    effectivePreviousLineBreakpoint = Math.min(context.max_line_length,
-      previousLine.lead_whitespace.length + previousLine.open.length + previousLine.prefix.length +
-      previousLine.content.length + previousLine.suffix.length);
-  } else {
-    effectivePreviousLineBreakpoint = previousLineBreakpoint;
-  }
-
-  // Check if the effective breakpoint in the previous line leaves room for any amount of additional
+  // Check if the ending position in the previous line leaves room for any amount of additional
   // content. We add 1 to account for the extra space we will insert.
 
-  if (effectivePreviousLineBreakpoint + 1 >= context.max_line_length) {
+  if (previousLineEndPosition + 1 >= context.max_line_length) {
     return;
   }
 
@@ -121,7 +100,7 @@ export function checkLineUnderflow(context: CommentContext, previousLine: Commen
 
   const tokens = tokenize(currentLine.content);
 
-  let spaceRemaining = context.max_line_length - effectivePreviousLineBreakpoint;
+  let spaceRemaining = context.max_line_length - previousLineEndPosition;
 
   const fittingTokens = [];
   for (const token of tokens) {
@@ -137,14 +116,48 @@ export function checkLineUnderflow(context: CommentContext, previousLine: Commen
     return;
   }
 
-  const tokenText = fittingTokens.join('');
+  let tokenText = '';
 
-  // Compose the replacement text. We have to take into account whether we are merging the entire
-  // current line into the previous line because all tokens fit.
+  // Merging the tokens can result in either whitespace ending the previous line or starting the
+  // current line. We want to exclude this one whitespace token. We could leave it up to the
+  // no-trailing-spaces rule but it seems inefficient. I think taking a destructive action is better
+  // here. Keep in mind that the only way back is undo, since by trimming and substituting one or
+  // more spaces for a single space, we lose the original spacing. If the number of tokens being
+  // moved is even, that means the last token being moved is whitespace. In that case, build the
+  // token text out of all tokens except for that final whitespace token.
+
+  const lastFitTokenIsWhiteSpace = fittingTokens.length % 2 === 0;
+  if (lastFitTokenIsWhiteSpace) {
+    tokenText = fittingTokens.slice(0, -1).join('');
+  } else {
+    tokenText = fittingTokens.join('');
+  }
+
+  // Compose the replacement text. We add in a space since we are removing a line break and do not
+  // want to end up merging two non-whitespace tokens into one.
 
   let replacementText = ' ' + tokenText;
+
+  // If we are not merging the entire line, then we want to append the start of the next comment
+  // into the replacement text.
+
   if (tokenText.length < currentLine.content.length) {
-    replacementText += '\n' + currentLine.lead_whitespace + currentLine.prefix;
+    replacementText += '\n' + currentLine.lead_whitespace + '//' + currentLine.prefix;
+  }
+
+  // Merging the tokens may result in either a whitespace token ending the previous line or starting
+  // the current line. So, we want to calculate an extra amount by which to shift the end range so
+  // that the whitespace is removed. If the last token is whitespace then we append by that amount
+  // of space. If the last token to move to the previous line is not whitespace, then there may be
+  // leading whitespace leftover on the current line that we want to exclude. We will exclude by
+  // artificially extending the replacement range end index by the length of that whitespace token.
+
+  let whitespaceExtensionLength = 0;
+  if (lastFitTokenIsWhiteSpace) {
+    whitespaceExtensionLength = fittingTokens[fittingTokens.length - 1].length;
+  } else if (tokens.length > fittingTokens.length &&
+    (tokens.length - fittingTokens.length) % 2 === 0) {
+    whitespaceExtensionLength = tokens[fittingTokens.length].length;
   }
 
   const rangeStart = context.code.getIndexFromLoc({
@@ -155,8 +168,8 @@ export function checkLineUnderflow(context: CommentContext, previousLine: Commen
 
   const rangeEnd = context.code.getIndexFromLoc({
     line: currentLine.index,
-    column: currentLine.lead_whitespace.length + currentLine.prefix.length +
-    tokenText.length
+    column: currentLine.lead_whitespace.length + currentLine.open.length +
+      currentLine.prefix.length + tokenText.length + whitespaceExtensionLength
   });
 
   const replacementRange: eslint.AST.Range = [rangeStart, rangeEnd];

@@ -71,6 +71,7 @@ export function checkLineOverflow(context: CommentContext, line: CommentLineDesc
 
   let textToInsert = '\n';
   textToInsert += line.text.slice(0, line.lead_whitespace.length);
+  textToInsert += '//';
   textToInsert += line.prefix + ''.padEnd(line.markup.length + line.markup_space.length);
 
   return <eslint.Rule.ReportDescriptor>{
