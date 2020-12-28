@@ -1,6 +1,7 @@
 import eslint from 'eslint';
 import { CommentContext } from '../comment-context';
-import { CommentLine, getRegionLength } from '../comment-line';
+import { CommentLine } from '../comment-line';
+import { getRegionLength } from "../get-region-length";
 import { tokenize } from '../tokenize';
 
 /**
