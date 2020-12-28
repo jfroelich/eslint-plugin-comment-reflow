@@ -68,6 +68,12 @@ export interface CommentLine {
    */
   markup_space: string;
 
+  /**
+   * Represents a directive such tslint or globals or @ts-ignore. This does not include the trailing
+   * space or the trailing text after the directive.
+   */
+  directive: string;
+
   /** Whitespace that follows the content and precedes the close. */
   suffix: string;
 }
