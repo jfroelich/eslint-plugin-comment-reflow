@@ -70,29 +70,51 @@ export function parseLine(code: eslint.SourceCode, comment: estree.Comment, line
     }
   } else {
     // eslint for some reason if forgetting about its own shebang type in the AST
+    // TODO: define my own Comment type and use it in place of eslint's erroneous type
     throw new TypeError(`Unexpected comment type "${<string>comment.type}"`);
   }
 
-  // Parse the content for markup such as markdown and jsdoc.
-
-  if (output.content.length) {
-    const matches = /^([*-]|\d+\.|@[a-zA-Z]+|#{1,6})(\s+)/.exec(output.content);
-    if (matches && matches.length === 3) {
-      output.markup = matches[1];
-      output.markup_space = matches[2];
-    } else {
-      output.markup = '';
-      output.markup_space = '';
-    }
-  } else {
-    output.markup = '';
-    output.markup_space = '';
-  }
+  const [markup, markupSpace] = parseMarkup(comment, output.prefix, output.content);
+  output.markup = markup;
+  output.markup_space = markupSpace;
 
   output.directive = parseDirective(comment, output.prefix, output.content, line);
   output.fixme = parseFixme(output.content);
 
   return output;
+}
+
+/**
+ * Parses the content for markup. Returns an array where the first element is some of the markup
+ * and the second is trailing whitespace if any. This focuses on markdown but it can also match
+ * jsdoc.
+ *
+ * @todo consider creating a jsdoc prop and a markdown prop and not mixing the two.
+ */
+function parseMarkup(comment: estree.Comment, prefix: string, content: string) {
+  // Only recognize markup in block comments.
+  if (comment.type !== 'Block') {
+    return ['', ''];
+  }
+
+  // Only recognize markup in javadoc comments
+  if (!prefix.startsWith('*')) {
+    return ['', ''];
+  }
+
+  if (!content.length) {
+    return ['', ''];
+  }
+
+  // TODO: markdown horizontal rules
+  // TODO: indented lists
+
+  const matches = /^([*-]|\d+\.|@[a-zA-Z]+|#{1,6})(\s+)/.exec(content);
+  if (matches && matches.length === 3) {
+    return [matches[1], matches[2]];
+  }
+
+  return ['', ''];
 }
 
 function parseDirective(comment: estree.Comment, prefix: string, content: string, line: number) {
