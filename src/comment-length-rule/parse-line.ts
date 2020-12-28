@@ -13,11 +13,11 @@ export function parseLine(code: eslint.SourceCode, comment: estree.Comment, line
   if (comment.type === 'Line') {
     output.open = '//';
     output.close = '';
-    const beforePrefix = output.text.slice(output.lead_whitespace.length + output.open.length);
-    const beforePrefixTrimmed = beforePrefix.trimStart();
-    const beforePrefixSpaceLen = beforePrefix.length - beforePrefixTrimmed.length;
+    const afterOpen = output.text.slice(output.lead_whitespace.length + output.open.length);
+    const afterOpenTrimStart = afterOpen.trimStart();
+    const afterOpenSpaceLen = afterOpen.length - afterOpenTrimStart.length;
     output.prefix = output.text.slice(output.lead_whitespace.length + output.open.length,
-      output.lead_whitespace.length + output.open.length + beforePrefixSpaceLen);
+      output.lead_whitespace.length + output.open.length + afterOpenSpaceLen);
     output.content = output.text.slice(output.lead_whitespace.length + output.open.length +
       output.prefix.length).trimEnd();
     output.suffix = output.text.slice(output.lead_whitespace.length + output.open.length +
