@@ -211,6 +211,10 @@ function parseFixme(content: string) {
     return 'HACK';
   }
 
+  // if (/^todo\(?.+\)?\:|warn\:|hack\:/i.test(currentLine.content)) {
+  //   return;
+  // }
+
   if (content.startsWith('TODO(')) {
     return 'TODO';
   }

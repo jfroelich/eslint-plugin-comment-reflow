@@ -10,11 +10,11 @@ export function checkBlockUnderflow(context: CommentContext, previousLine: Comme
     return;
   }
 
-  // If the length of the content of the previous line is 0 then it represents a paragraph break
-  // and should not be considered underflow.
-  // TODO: what about a line that appears empty but is actually whitespace?
+  // If the length of the content of the previous line is 0 then it represents a paragraph break and
+  // should not be considered underflow. Similarly, if the current line has no content then the
+  // previous line does not underflow.
 
-  if (previousLine.content.length === 0) {
+  if (previousLine.content.length === 0 || currentLine.content.length === 0) {
     return;
   }
 
@@ -26,13 +26,7 @@ export function checkBlockUnderflow(context: CommentContext, previousLine: Comme
     return;
   }
 
-  // If the current line has no content then the previous line does not underflow.
-
-  if (currentLine.content.length === 0) {
-    return;
-  }
-
-  if (previousLine.directive.length > 0) {
+  if (previousLine.directive || currentLine.directive) {
     return;
   }
 
@@ -55,9 +49,7 @@ export function checkBlockUnderflow(context: CommentContext, previousLine: Comme
     return;
   }
 
-  // TODO: todo and warn and so on should be parsed as markup
-
-  if (/^todo\(?.+\)?\:|warn\:|hack\:/i.test(currentLine.content)) {
+  if (currentLine.fixme.length > 0) {
     return;
   }
 
