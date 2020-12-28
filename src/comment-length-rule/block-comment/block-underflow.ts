@@ -30,22 +30,20 @@ export function checkBlockUnderflow(context: CommentContext, previousLine: Comme
     return;
   }
 
+  // Prevent markdown on current line from being merged into previous line.
+
   if (currentLine.markup.startsWith('*') || currentLine.markup.startsWith('-') ||
     /^\d/.test(currentLine.markup)) {
     return;
   }
 
-  // TODO: should be parsed as markup
+  // Prevent jsdoc tag on current line from being merged into previous line.
 
   if (currentLine.markup.startsWith('@')) {
     return;
   }
 
-  // TODO: should be parsed as markup
-
-  if (/^\|.+\|$/.test(currentLine.content)) {
-    return;
-  }
+  // Prevent fixme tag on current line from being merged into previous line.
 
   if (currentLine.fixme.length > 0) {
     return;

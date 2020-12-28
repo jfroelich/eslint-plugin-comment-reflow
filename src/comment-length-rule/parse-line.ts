@@ -114,6 +114,12 @@ function parseMarkup(comment: estree.Comment, prefix: string, content: string) {
     return [matches[1], matches[2]];
   }
 
+  // markdown table parsing, this probably could be written better
+
+  if (/^\|.+\|$/.test(content)) {
+    return [content, ''];
+  }
+
   return ['', ''];
 }
 
@@ -207,6 +213,7 @@ function parseDirective(comment: estree.Comment, prefix: string, content: string
 
 /**
  * @todo regex
+ * @todo do we indent the text on overflow? if so we need to figure out the indent level.
  */
 function parseFixme(content: string) {
   if (content.startsWith('FIXME: ')) {
