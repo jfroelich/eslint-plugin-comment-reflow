@@ -19,6 +19,11 @@ export function checkBlockComment(context: CommentContext) {
     return;
   }
 
+  const nextToken = context.code.getTokenAfter(context.comment, { includeComments: true });
+  if (nextToken && context.comment.loc.end.line === nextToken.loc.start.line) {
+    return;
+  }
+
   context.in_md_fence = false;
   context.in_jsdoc_example = false;
 
