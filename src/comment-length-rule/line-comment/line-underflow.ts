@@ -1,6 +1,6 @@
 import eslint from 'eslint';
 import { CommentContext } from '../comment-context';
-import { CommentLineDesc } from '../comment-line-desc';
+import { CommentLineDesc, getContentLengthInclusive, getPrefixLengthInclusive, getSuffixLengthInclusive } from '../comment-line-desc';
 import { tokenize } from '../tokenize';
 
 /**
@@ -21,7 +21,11 @@ export function checkLineUnderflow(context: CommentContext, previousLine: Commen
     return;
   }
 
-  // If either line has no content then do not consider underflow.
+  // TODO: if the two lines have different prefix lengths then do we prevent underflow? is that
+  // an author's intent to say two lines are different or is that laziness?
+
+  // If either line has no content then do not consider underflow. These are basically empty lines
+  // in a comment, which is routine. Assume the author wants to keep lines separate.
 
   if (previousLine.content.length === 0 || currentLine.content.length === 0) {
     return;
@@ -36,8 +40,7 @@ export function checkLineUnderflow(context: CommentContext, previousLine: Commen
   // it looks like two lines should be merged, but they should not be, because of the suffix. I
   // myself keep screwing this up thinking there is an error, but this is not an error.
 
-  if (previousLine.lead_whitespace.length + previousLine.open.length + previousLine.prefix.length +
-    previousLine.content.length + previousLine.suffix.length >= context.max_line_length) {
+  if (getSuffixLengthInclusive(previousLine) >= context.max_line_length) {
     return;
   }
 
@@ -85,8 +88,7 @@ export function checkLineUnderflow(context: CommentContext, previousLine: Commen
     return;
   }
 
-  const previousLineEndPosition = previousLine.lead_whitespace.length + previousLine.open.length +
-    previousLine.prefix.length + previousLine.content.length + previousLine.suffix.length;
+  const previousLineEndPosition = getSuffixLengthInclusive(previousLine);
 
   // Check if the ending position in the previous line leaves room for any amount of additional
   // content. We add 1 to account for the extra space we will insert.
@@ -162,14 +164,12 @@ export function checkLineUnderflow(context: CommentContext, previousLine: Commen
 
   const rangeStart = context.code.getIndexFromLoc({
     line: previousLine.index,
-    column: previousLine.lead_whitespace.length + previousLine.open.length +
-      previousLine.prefix.length + previousLine.content.length
+    column: getContentLengthInclusive(previousLine)
   });
 
   const rangeEnd = context.code.getIndexFromLoc({
     line: currentLine.index,
-    column: currentLine.lead_whitespace.length + currentLine.open.length +
-      currentLine.prefix.length + tokenText.length + whitespaceExtensionLength
+    column: getPrefixLengthInclusive(currentLine) + tokenText.length + whitespaceExtensionLength
   });
 
   const replacementRange: eslint.AST.Range = [rangeStart, rangeEnd];

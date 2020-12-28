@@ -1,5 +1,5 @@
 /**
- * Describes the line of a comment
+ * Describes a line of a comment
  */
 export interface CommentLineDesc {
   /** The ESLint line index, which is 1-based. */
@@ -58,4 +58,28 @@ export interface CommentLineDesc {
 
   /** Whitespace that follows the content and precedes the close. */
   suffix: string;
+}
+
+/**
+ * Returns the length of the prefix, including all characters preceding the prefix in the line.
+ */
+export function getPrefixLengthInclusive(line: CommentLineDesc) {
+  return line.lead_whitespace.length + line.open.length + line.prefix.length;
+}
+
+/**
+ * Returns the length of the content, including the text before the content, and excluding the
+ * suffix and close.
+ */
+export function getContentLengthInclusive(line: CommentLineDesc) {
+  return line.lead_whitespace.length + line.open.length + line.prefix.length + line.content.length;
+}
+
+/**
+ * Returns the length of the suffix, including the text before the suffix, and excluding the
+ * close.
+ */
+export function getSuffixLengthInclusive(line: CommentLineDesc) {
+  return line.lead_whitespace.length + line.open.length + line.prefix.length + line.content.length +
+    line.suffix.length;
 }
