@@ -73,10 +73,10 @@ export function parseLine(code: eslint.SourceCode, comment: estree.Comment, line
     throw new TypeError(`Unexpected comment type "${<string>comment.type}"`);
   }
 
-  // Re-parse the content for markup such as markdown and jsdoc.
+  // Parse the content for markup such as markdown and jsdoc.
 
   if (output.content.length) {
-    const matches = /^([*-]|\d+\.|@[a-zA-Z]+)(\s+)/.exec(output.content);
+    const matches = /^([*-]|\d+\.|@[a-zA-Z]+|#{1,6})(\s+)/.exec(output.content);
     if (matches && matches.length === 3) {
       output.markup = matches[1];
       output.markup_space = matches[2];

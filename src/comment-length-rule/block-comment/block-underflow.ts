@@ -35,15 +35,13 @@ export function checkBlockUnderflow(context: CommentContext, previousLine: Comme
     return;
   }
 
-  // TODO: markdown header should be parsed as markup
-
-  if (/^#{1,6}/.test(currentLine.markup)) {
-    return;
-  }
+  // TODO: should be parsed as markup
 
   if (currentLine.markup.startsWith('@')) {
     return;
   }
+
+  // TODO: should be parsed as markup
 
   if (/^\|.+\|$/.test(currentLine.content)) {
     return;
