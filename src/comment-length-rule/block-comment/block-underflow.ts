@@ -62,6 +62,9 @@ export function checkBlockUnderflow(context: CommentContext, previousLine: Comme
     return;
   }
 
+  // TODO: there is no point to finding the content break in the case of underflow. Not sure what I
+  // was thinking earlier. Take a look at how I solved this in the line underflow logic.
+
   // Find the breakpoint in the previous line. This tries to find a breaking space earlier in the
   // line. If not found, then this is -1. However, -1 does not indicate that the content is at the
   // threshold. -1 only means no earlier breakpoint found.
