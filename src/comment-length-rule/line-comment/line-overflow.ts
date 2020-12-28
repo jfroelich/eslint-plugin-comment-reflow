@@ -40,23 +40,7 @@ export function checkLineOverflow(context: CommentContext, line: CommentLine) {
 
   // If there is a comment directive then never overflow
 
-  if (line.content.startsWith('eslint-')) {
-    return;
-  }
-
-  // TODO: this might not work, is this in prefix?
-
-  if (line.content.startsWith('@ts-')) {
-    return;
-  }
-
-  if (line.content.startsWith('tslint:')) {
-    return;
-  }
-
-  // typescript triple slash directive
-
-  if (/^\/\s<(reference|amd)/.test(line.content)) {
+  if (line.directive.length > 0) {
     return;
   }
 

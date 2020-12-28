@@ -26,14 +26,13 @@ export function checkBlockUnderflow(context: CommentContext, previousLine: Comme
     return;
   }
 
-  // If the current line has no content then the previous line does not underflow
+  // If the current line has no content then the previous line does not underflow.
+
   if (currentLine.content.length === 0) {
     return;
   }
 
-  // TODO: these should be parsed as markup
-
-  if (previousLine.index === 1 && /^(global|jslint|property)\s/.test(previousLine.content)) {
+  if (previousLine.directive.length > 0) {
     return;
   }
 
@@ -44,7 +43,7 @@ export function checkBlockUnderflow(context: CommentContext, previousLine: Comme
 
   // TODO: markdown header should be parsed as markup
 
-  if (/^#+/.test(currentLine.markup)) {
+  if (/^#{1,6}/.test(currentLine.markup)) {
     return;
   }
 

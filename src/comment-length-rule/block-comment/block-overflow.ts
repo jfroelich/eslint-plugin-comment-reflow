@@ -45,18 +45,7 @@ export function checkBlockOverflow(context: CommentContext, line: CommentLine) {
     return;
   }
 
-  // Ignore tslint directives.
-
-  if (line.index === context.comment.loc.start.line && !line.prefix.startsWith('*') &&
-    line.content.startsWith('tslint:')) {
-    return;
-  }
-
-  // Ignore see tags.
-  // TODO: once we properly check for jsdoc tag then we should be testing against that substring
-  // instead of content?
-
-  if (line.prefix.startsWith('*') && line.content.startsWith('@see')) {
+  if (line.directive.length > 0 || line.markup === '@see') {
     return;
   }
 
