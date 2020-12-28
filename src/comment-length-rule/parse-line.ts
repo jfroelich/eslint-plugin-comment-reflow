@@ -14,10 +14,12 @@ export function parseLine(code: eslint.SourceCode, comment: estree.Comment, line
   // Parse the leading whitespace. For a single line comment, or the first line of a block comment,
   // this is all whitespace leading up to the first slash. For other lines of a block comment, this
   // is all whitespace leading up to the first non-whitespace character.
+
   const textTrimmedStart = output.text.trimStart();
   output.lead_whitespace = output.text.slice(0, output.text.length - textTrimmedStart.length);
 
   // Set the opening and closing text
+
   if (comment.type === 'Block') {
     if (line === comment.loc.start.line && line === comment.loc.end.line) {
       output.open = '/*';
@@ -41,6 +43,7 @@ export function parseLine(code: eslint.SourceCode, comment: estree.Comment, line
   // preceding the content. For the first line of a block comment this includes the forward slash,
   // asterisk(s), and any whitespace preceding the content. For other lines, this includes the
   // leading asterisk if one is present and any whitespace preceding the content.
+
   if (comment.type === 'Block') {
     if (line === comment.loc.start.line && line === comment.loc.end.line) {
       const haystack = output.text.slice(output.lead_whitespace.length + output.open.length,
@@ -61,14 +64,16 @@ export function parseLine(code: eslint.SourceCode, comment: estree.Comment, line
       output.prefix = matches ? matches[0] : '';
     }
   } else if (comment.type === 'Line') {
-    const text = output.text.slice(comment.loc.start.column + output.open.length);
-    const whitespaceLength = text.length - text.trimStart().length;
-    output.prefix = output.text.slice(comment.loc.start.column,
-      comment.loc.start.column + output.open.length + whitespaceLength);
+    const text = output.text.slice(output.lead_whitespace.length + output.open.length);
+    const textTrimmedStart = text.trimStart();
+    const whitespacePrefixLength = text.length - textTrimmedStart.length;
+    output.prefix = output.text.slice(output.lead_whitespace.length + output.open.length,
+      output.lead_whitespace.length + output.open.length + whitespacePrefixLength);
   }
 
   // Parse the content. This is all content following the prefix and preceding the suffix. The
   // content does not include leading or trailing whitespace.
+
   if (comment.type === 'Block') {
     if (line === comment.loc.start.line && line === comment.loc.end.line) {
       output.content = output.text.slice(output.lead_whitespace.length + output.open.length +
@@ -107,6 +112,7 @@ export function parseLine(code: eslint.SourceCode, comment: estree.Comment, line
   // non-whitespace character. For the last line of a block comment this is all whitespace following
   // the content and the comment end syntax. For other lines of a block comment this is all
   // whitespace following the content. The suffix does not include a line break.
+
   if (comment.type === 'Block') {
     if (line === comment.loc.start.line && line === comment.loc.end.line) {
       output.suffix = output.text.slice(output.lead_whitespace.length + output.open.length +

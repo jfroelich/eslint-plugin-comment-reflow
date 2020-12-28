@@ -31,6 +31,8 @@ export interface CommentLineDesc {
   text: string;
 
   /**
+   * @todo i've confused myself here, does prefix include the open? i don't think it should.
+   *
    * The slash and asterisk(s) along with immediately subsequent whitespace of a comment line. This
    * may be an empty string for non-javadoc comments. This does not include the whitespace
    * preceding the slash and/or asterisk(s).

@@ -14,6 +14,8 @@ import { tokenize } from '../tokenize';
  */
 export function checkLineUnderflow(context: CommentContext, previousLine: CommentLineDesc,
   currentLine: CommentLineDesc) {
+  console.debug('previous line %d current line %d', previousLine.index, currentLine.index);
+
   // If the previous line is not immediately preceding the current line then we do not consider
   // underflow. This can happen because the caller passes in any previous line comment, not only the
   // immediately previous line comment.
@@ -22,10 +24,16 @@ export function checkLineUnderflow(context: CommentContext, previousLine: Commen
     return;
   }
 
-  // If the length of the content of the previous line is 0 then it represents a paragraph break
-  // and should not be considered underflow.
+  // If either line has no content then do not consider underflow.
 
-  if (previousLine.content.length === 0) {
+  // TODO: there is a bug, parseLine is not finding content for single lines
+
+  if (previousLine.content.length === 0 || currentLine.content.length === 0) {
+    console.debug('line %d content "%s"', previousLine.index, previousLine.content);
+    console.debug('line %d content "%s"', currentLine.index, currentLine.content);
+
+    console.debug('either line %d or line %d has no content', previousLine.index,
+      currentLine.index);
     return;
   }
 
@@ -33,13 +41,8 @@ export function checkLineUnderflow(context: CommentContext, previousLine: Commen
   // line does not underflow.
 
   if (previousLine.lead_whitespace.length + previousLine.open.length + previousLine.prefix.length +
-    previousLine.content.length >= context.max_line_length) {
-    return;
-  }
-
-  // If the current line has no content then the previous line does not underflow
-
-  if (currentLine.content.length === 0) {
+    previousLine.content.length + previousLine.suffix.length >= context.max_line_length) {
+    console.debug('the line preceding line %d has no room', currentLine.index);
     return;
   }
 
@@ -86,6 +89,8 @@ export function checkLineUnderflow(context: CommentContext, previousLine: Commen
   if (currentLine.content.startsWith('TODO(')) {
     return;
   }
+
+  console.debug('finding breakpoint in line preceding line %d', currentLine.index);
 
   // Find the breakpoint in the previous line. This tries to find a breaking space earlier in the
   // line. If not found, then this is -1. However, -1 does not indicate that the content is at the
