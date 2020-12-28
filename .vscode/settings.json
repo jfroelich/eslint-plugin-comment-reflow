@@ -46,6 +46,7 @@
     "tsconfig.json": true,
     "package-lock.json": true,
     "readme.md": true,
-    "LICENSE": true
+    "LICENSE": true,
+    "CONTRIBUTING.md": true
   }
 }
