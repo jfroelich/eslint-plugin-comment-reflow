@@ -94,6 +94,7 @@ export function parseLine(code: eslint.SourceCode, comment: estree.Comment, line
   }
 
   // Parse markup such as markdown and jsdoc.
+
   if (output.content.length) {
     const matches = /^([*-]|\d+\.|@[a-zA-Z]+)(\s+)/.exec(output.content);
     if (matches && matches.length === 3) {
@@ -127,7 +128,7 @@ export function parseLine(code: eslint.SourceCode, comment: estree.Comment, line
       output.suffix = output.text.slice(output.lead_whitespace.length + output.open.length +
         output.prefix.length + output.content.length);
     }
-  } else {
+  } else if (comment.type === 'Line') {
     output.suffix = output.text.slice(output.lead_whitespace.length + output.open.length +
       output.prefix.length + output.content.length);
   }
