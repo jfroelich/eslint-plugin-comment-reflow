@@ -3,7 +3,7 @@ import eslint from 'eslint';
 import estree from 'estree';
 import { checkBlockComment } from './block-comment/block-comment';
 import { CommentContext } from './comment-context';
-import { CommentLineDesc } from './comment-line-desc';
+import { CommentLine } from './comment-line';
 import { checkLineComment } from './line-comment/line-comment';
 import { parseLine } from './parse-line';
 
@@ -37,7 +37,7 @@ function analyzeProgram(context: eslint.Rule.RuleContext, node: estree.Node) {
 
   const code = context.getSourceCode();
   const comments = code.getAllComments();
-  let previousLine: CommentLineDesc;
+  let previousLine: CommentLine;
 
   for (let index = 0; index < comments.length; index++) {
     const commentContext: CommentContext = {

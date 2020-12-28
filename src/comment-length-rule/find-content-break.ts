@@ -1,10 +1,10 @@
-import { CommentLineDesc } from './comment-line-desc';
+import { CommentLine } from './comment-line';
 
 /**
  * Return the position where to break the text or -1. This only searches in a subregion of the text
  * so as to not match whitespace in other places.
  */
-export function findContentBreak(line: CommentLineDesc, maxLineLength: number) {
+export function findContentBreak(line: CommentLine, maxLineLength: number) {
   // Find nothing when the content is in bounds.
   // TODO: what about suffix here? we sometimes want to count it and sometimes not?
 

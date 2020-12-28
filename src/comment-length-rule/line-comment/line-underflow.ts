@@ -1,6 +1,6 @@
 import eslint from 'eslint';
 import { CommentContext } from '../comment-context';
-import { CommentLineDesc, getContentLengthInclusive, getPrefixLengthInclusive, getSuffixLengthInclusive } from '../comment-line-desc';
+import { CommentLine, getContentLengthInclusive, getPrefixLengthInclusive, getSuffixLengthInclusive } from '../comment-line';
 import { tokenize } from '../tokenize';
 
 /**
@@ -11,8 +11,8 @@ import { tokenize } from '../tokenize';
  * @todo there is ridiculous overlap with block overflow, maybe i need to think this, maybe what i
  * want is a general underflow check that is not specific to the comment type.
  */
-export function checkLineUnderflow(context: CommentContext, previousLine: CommentLineDesc,
-  currentLine: CommentLineDesc) {
+export function checkLineUnderflow(context: CommentContext, previousLine: CommentLine,
+  currentLine: CommentLine) {
   // If the previous line is not immediately preceding the current line then we do not consider
   // underflow. This can happen because the caller passes in any previous line comment, not only the
   // immediately previous line comment.

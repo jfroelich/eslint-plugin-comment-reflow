@@ -1,5 +1,5 @@
 import { CommentContext } from '../comment-context';
-import { CommentLineDesc } from '../comment-line-desc';
+import { CommentLine } from '../comment-line';
 import { parseLine } from "../parse-line";
 import { checkBlockOverflow } from './block-overflow';
 import { checkBlockUnderflow } from './block-underflow';
@@ -22,7 +22,7 @@ export function checkBlockComment(context: CommentContext) {
   context.in_md_fence = false;
   context.in_jsdoc_example = false;
 
-  for (let loc = context.comment.loc, line = loc.start.line, previousLine: CommentLineDesc;
+  for (let loc = context.comment.loc, line = loc.start.line, previousLine: CommentLine;
     line <= loc.end.line; line++) {
     const currentLine = parseLine(context.code, context.comment, line);
 

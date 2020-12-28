@@ -1,9 +1,9 @@
 import type eslint from 'eslint';
 import { CommentContext } from '../comment-context';
-import { CommentLineDesc } from '../comment-line-desc';
+import { CommentLine } from '../comment-line';
 import { findContentBreak } from '../find-content-break';
 
-export function checkBlockOverflow(context: CommentContext, line: CommentLineDesc) {
+export function checkBlockOverflow(context: CommentContext, line: CommentLine) {
   if (!updatePreformattedState(context, line)) {
     return;
   }
@@ -153,7 +153,7 @@ export function checkBlockOverflow(context: CommentContext, line: CommentLineDes
  * Detects transitions into and out of a preformatted state in a block comment. Returns whether the
  * text should still be considered for overflow.
  */
-function updatePreformattedState(context: CommentContext, line: CommentLineDesc) {
+function updatePreformattedState(context: CommentContext, line: CommentLine) {
   if (context.in_md_fence) {
     if (line.index > context.comment.loc.start.line && line.content.startsWith('```')) {
       // Exiting markdown fence section. Do not consider overflow.

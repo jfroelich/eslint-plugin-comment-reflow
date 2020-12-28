@@ -1,13 +1,13 @@
 import eslint from 'eslint';
 import estree from 'estree';
-import { CommentLineDesc } from './comment-line-desc';
+import { CommentLine } from './comment-line';
 
 /**
  * @todo since our primary logic branches on one of five situations, we should organize the code
  * around those five situations, not based on which part of the line we are parsing.
  */
 export function parseLine(code: eslint.SourceCode, comment: estree.Comment, line: number) {
-  const output = <CommentLineDesc>{};
+  const output = <CommentLine>{};
   output.index = line;
   output.text = code.lines[line - 1];
 
