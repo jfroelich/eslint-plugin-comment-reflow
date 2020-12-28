@@ -10,6 +10,9 @@ export function parseLine(code: eslint.SourceCode, comment: estree.Comment, line
   const textTrimmedStart = output.text.trimStart();
   output.lead_whitespace = output.text.slice(0, output.text.length - textTrimmedStart.length);
 
+  // TODO: support triple slashes, treat the 3rd slash a part of the prefix, and upon making this
+  // change make sure to fix the typescript <reference> check in line-comment handlers
+
   if (comment.type === 'Line') {
     output.open = '//';
     output.close = '';
