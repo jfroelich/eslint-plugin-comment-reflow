@@ -90,6 +90,7 @@ export function parseLine(code: eslint.SourceCode, comment: estree.Comment, line
   }
 
   output.directive = parseDirective(comment, output.prefix, output.content, line);
+  output.fixme = parseFixme(output.content);
 
   return output;
 }
@@ -177,6 +178,41 @@ function parseDirective(comment: estree.Comment, prefix: string, content: string
 
   if (comment.type === 'Line' && /^\/\s*<(reference|amd)/.test(content)) {
     return content.slice(1).trimLeft();
+  }
+
+  return '';
+}
+
+/**
+ * @todo regex
+ */
+function parseFixme(content: string) {
+  if (content.startsWith('FIXME: ')) {
+    return 'FIXME';
+  }
+
+  if (content.startsWith('TODO: ')) {
+    return 'TODO';
+  }
+
+  if (content.startsWith('BUG: ')) {
+    return 'BUG';
+  }
+
+  if (content.startsWith('WARN: ')) {
+    return 'WARN';
+  }
+
+  if (content.startsWith('WARNING: ')) {
+    return 'WARNING';
+  }
+
+  if (content.startsWith('HACK: ')) {
+    return 'HACK';
+  }
+
+  if (content.startsWith('TODO(')) {
+    return 'TODO';
   }
 
   return '';

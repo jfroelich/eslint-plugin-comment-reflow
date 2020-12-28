@@ -74,6 +74,15 @@ export interface CommentLine {
    */
   directive: string;
 
+  /**
+   * Contains the start of some FIXME text if the comment content contains some.
+   *
+   * @example
+   *   // TODO(jfroelich): Add support for fixme to this project!
+   *   // BUG: Only supporting uppercase is a feature.
+   */
+  fixme: string;
+
   /** Whitespace that follows the content and precedes the close. */
   suffix: string;
 }

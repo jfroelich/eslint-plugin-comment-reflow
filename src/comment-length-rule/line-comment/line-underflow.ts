@@ -45,29 +45,11 @@ export function checkLineUnderflow(context: CommentContext, previousLine: Commen
     return;
   }
 
-  if (previousLine.directive.length > 0) {
+  if (previousLine.directive.length > 0 || currentLine.directive.length > 0) {
     return;
   }
 
-  if (currentLine.directive.length > 0) {
-    return;
-  }
-
-  // TODO: BUG, XXX, FIXME, WARNING, FIXME
-
-  if (currentLine.content.startsWith('TODO:')) {
-    return;
-  }
-
-  if (currentLine.content.startsWith('WARN:')) {
-    return;
-  }
-
-  if (currentLine.content.startsWith('HACK:')) {
-    return;
-  }
-
-  if (currentLine.content.startsWith('TODO(')) {
+  if (currentLine.fixme.length > 0) {
     return;
   }
 
