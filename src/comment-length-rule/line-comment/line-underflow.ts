@@ -1,208 +1,180 @@
-import assert from 'assert';
 import eslint from 'eslint';
 import { CommentContext } from '../comment-context';
 import { CommentLineDesc } from '../comment-line-desc';
+import { findContentBreak } from '../find-content-break';
+import { tokenize } from '../tokenize';
 
-export function checkLineUnderflow(previousContext: CommentContext, previousLine: CommentLineDesc,
-  currentContext: CommentContext, line: CommentLineDesc) {
-  // Get the text of the line. Do not confuse this with comment value. line is 1 based so we
-  // subtract 1 to get the line in the lines array.
+/**
+ * @todo passing in one context or another is weird, i think context maybe really should be unlinked
+ * from comment? maybe all the comment specific parts inside context should be embedded instead
+ * inside line, and the comment context then should be generic to all comments. right now we are
+ * cheating with the promise to not access comment-specific data in the context
+ * @todo there is ridiculous overlap with block overflow, maybe i need to think this, maybe what i
+ * want is a general underflow check that is not specific to the comment type.
+ */
+export function checkLineUnderflow(context: CommentContext, previousLine: CommentLineDesc,
+  currentLine: CommentLineDesc) {
+  // If the previous line is not immediately preceding the current line then we do not consider
+  // underflow. This can happen because the caller passes in any previous line comment, not only the
+  // immediately previous line comment.
 
-  const text = line.text;
-
-  // The comment line only underflows when it is less than the maximum line length.
-
-  if (text.length >= currentContext.max_line_length) {
+  if (currentLine.index - previousLine.index !== 1) {
     return;
   }
 
-  // We must consider that eslint stripped out the line break from the text. Therefore, if we count
-  // the line break character itself, and we are right at the threshold, this is not underflow.
+  // If the length of the content of the previous line is 0 then it represents a paragraph break
+  // and should not be considered underflow.
 
-  if (text.length + 1 === currentContext.max_line_length) {
+  if (previousLine.content.length === 0) {
     return;
   }
 
-  // For a single line comment line to underflow, it cannot be the final comment in the file.
+  // If the length of the previous line is greater than or equal to the threshold then the previous
+  // line does not underflow.
 
-  const comments = currentContext.code.getAllComments();
-  if (currentContext.comment_index + 1 === comments.length) {
+  if (previousLine.lead_whitespace.length + previousLine.open.length + previousLine.prefix.length +
+    previousLine.content.length >= context.max_line_length) {
     return;
   }
 
-  // For a single line comment line to underflow, it must have some content other than the leading
-  // comment syntax.
+  // If the current line has no content then the previous line does not underflow
 
-  const trimmedText = text.trim();
-  if (trimmedText === '//') {
+  if (currentLine.content.length === 0) {
     return;
   }
 
-  // If the current single line comment is an eslint pragma kind of comment then never consider it
-  // to underflow.
-
-  const content = line.content;
-
-  if (content.startsWith('eslint-')) {
+  if (previousLine.content.startsWith('eslint-')) {
     return;
   }
 
-  if (content.startsWith('@ts-')) {
+  if (previousLine.content.startsWith('@ts-')) {
     return;
   }
 
-  if (content.startsWith('tslint:')) {
+  if (previousLine.content.startsWith('tslint:')) {
     return;
   }
 
-  // typescript triple slash directive
-
-  if (/^\/\s<(reference|amd)/.test(content)) {
+  if (/^\/\s<(reference|amd)/.test(previousLine.content)) {
     return;
   }
 
-  // We know this comment is not the final comment. Examine the next comment.
-
-  const next = comments[currentContext.comment_index + 1];
-
-  // For a single line comment line to underflow, there must be a subsequent single line comment
-  // line. The comments array contains block and single line comments mixed together. If the next
-  // comment is not a single line comment then there is a break that prevents merging. We do not
-  // merge single lines with blocks.
-
-  if (next.type !== 'Line') {
+  if (currentLine.content.startsWith('eslint-')) {
     return;
   }
 
-  // For a single line comment to underflow, the next comment must be immediately adjacent to the
-  // current comment. Recall that we are iterating over an array of comments that may be spread out
-  // all over the lines array, so the next comment is not guaranteed adjacent. The next comment is
-  // considered adjacent if the difference between the current line number and the next comment's
-  // line number is 1. We could use comment.loc.end.line or line here.
-
-  if (next.loc.start.line - line.index !== 1) {
+  if (currentLine.content.startsWith('@ts-')) {
     return;
   }
 
-  // Get the text of the next comment line. Line is offset-1, so we just get the text at line.
-
-  const nextCommentLineText = currentContext.code.lines[line.index];
-
-  // Find where the comment starts. We cannot assume the comment is at the start of the line as it
-  // could be a trailing comment. We search from the left because we want the first set of slashes,
-  // as any extra slashes are part of the comment's value itself.
-
-  const commentStartPosition = nextCommentLineText.indexOf('//');
-
-  // This should never happen. ESLint told us we have a single line comment.
-
-  assert(commentStartPosition !== -1, `Invalid comment line "${nextCommentLineText}"`);
-
-  // Grab the content of the comment without the text leading up the comment and without the double
-  // forward slashes.
-
-  const nextContent = nextCommentLineText.slice(commentStartPosition + 2);
-
-  // For the current line to underflow, the next line has to have some content other than the
-  // comment syntax or else we assume the author wants to prevent merging, such as forcing a new
-  // paragraph.
-
-  if (!nextContent) {
+  if (currentLine.content.startsWith('tslint:')) {
     return;
   }
 
-  const nextContentLeftTrimmed = nextContent.trimStart();
-
-  // For the current line to underflow, the next line has to have some content other than comment
-  // syntax and also other than just whitespace.
-
-  if (!nextContentLeftTrimmed) {
+  if (currentLine.content.startsWith('TODO:')) {
     return;
   }
 
-  // If there is an lint pragma on the next line, then deem the current line to not underflow,
-  // because the next line should not be merged. Recall that here we are working with the comment
-  // value, not the line text. The comment value already removed the '//'.
-
-  if (nextContentLeftTrimmed.startsWith('eslint-')) {
+  if (currentLine.content.startsWith('WARN:')) {
     return;
   }
 
-  if (nextContentLeftTrimmed.startsWith('@ts-')) {
+  if (currentLine.content.startsWith('HACK:')) {
     return;
   }
 
-  if (nextContentLeftTrimmed.startsWith('tslint:')) {
+  if (currentLine.content.startsWith('TODO(')) {
     return;
   }
 
-  if (nextContentLeftTrimmed.startsWith('TODO:')) {
+  // Find the breakpoint in the previous line. This tries to find a breaking space earlier in the
+  // line. If not found, then this is -1. However, -1 does not indicate that the content is at the
+  // threshold. -1 only means no earlier breakpoint found.
+
+  const previousLineBreakpoint = findContentBreak(previousLine, context.max_line_length);
+
+  let effectivePreviousLineBreakpoint;
+  if (previousLineBreakpoint === -1) {
+    // If we did not find an early breakpoint, then the effective breakpoint is the character at the
+    // end of the suffix.
+    effectivePreviousLineBreakpoint = Math.min(context.max_line_length,
+      previousLine.lead_whitespace.length + previousLine.open.length + previousLine.prefix.length +
+      previousLine.content.length + previousLine.suffix.length);
+  } else {
+    effectivePreviousLineBreakpoint = previousLineBreakpoint;
+  }
+
+  // Check if the effective breakpoint in the previous line leaves room for any amount of additional
+  // content. We add 1 to account for the extra space we will insert.
+
+  if (effectivePreviousLineBreakpoint + 1 >= context.max_line_length) {
     return;
   }
 
-  if (nextContentLeftTrimmed.startsWith('WARN:')) {
+  // Split the current content into word and space tokens. We know the first token is a word because
+  // we know that content does not include leading whitespace and is not empty.
+
+  const tokens = tokenize(currentLine.content);
+
+  let spaceRemaining = context.max_line_length - effectivePreviousLineBreakpoint;
+
+  const fittingTokens = [];
+  for (const token of tokens) {
+    if (token.length < spaceRemaining) {
+      fittingTokens.push(token);
+      spaceRemaining -= token.length;
+    } else {
+      break;
+    }
+  }
+
+  if (fittingTokens.length === 0) {
     return;
   }
 
-  if (nextContentLeftTrimmed.startsWith('HACK:')) {
-    return;
+  const tokenText = fittingTokens.join('');
+
+  // Compose the replacement text. We have to take into account whether we are merging the entire
+  // current line into the previous line because all tokens fit.
+
+  let replacementText = ' ' + tokenText;
+  if (tokenText.length < currentLine.content.length) {
+    replacementText += '\n' + currentLine.lead_whitespace + currentLine.prefix;
   }
 
-  if (nextContentLeftTrimmed.startsWith('TODO(')) {
-    return;
-  }
+  const rangeStart = context.code.getIndexFromLoc({
+    line: previousLine.index,
+    column: previousLine.lead_whitespace.length + previousLine.open.length +
+      previousLine.prefix.length + previousLine.content.length
+  });
 
-  // To support word wrap, we want to consider whether the next line can be merged into the current
-  // line based on whether the first word or two will fit. So we want to find the maximum number of
-  // tokens we can grab from the next line and merge into the current line. At the moment this is
-  // rudimentary and looking at just one token at a time, but I will eventually improve this. So,
-  // in order to find the first word break, we want to search for the break, but starting from a
-  // position that excludes the initial leading whitespace in the next line comment content. To
-  // exclude that leading whitespace we first have to measure the number of leading whitespace
-  // characters.
+  const rangeEnd = context.code.getIndexFromLoc({
+    line: currentLine.index,
+    column: currentLine.lead_whitespace.length + currentLine.prefix.length +
+    tokenText.length
+  });
 
-  const leadingSpaceCount = nextContent.length - nextContentLeftTrimmed.length;
-
-  // Look for the offset of the first word break in the next line content, starting from the
-  // position after the leading whitespace.
-
-  const edge = nextContent.indexOf(' ', leadingSpaceCount);
-
-  // If there is no intermediate whitespace in the next line then the entire next line needs to be
-  // able to merged with the current line. We simply need to add it the length of the current
-  // line. If the sum of the two is greater than the total preferred text length per line, then we
-  // treat the current line as not underflowing.
-
-  if (edge === -1 && nextContent.length + text.length > currentContext.max_line_length) {
-    return;
-  }
-
-  // If there is a space in the next line, check if the characters preceding that space can be added
-  // to the current line text. If shifting the characters would cause the current line to overflow,
-  // then the current line is not considered underflow.
-
-  if (edge !== -1 && edge + text.length > currentContext.max_line_length) {
-    return;
-  }
+  const replacementRange: eslint.AST.Range = [rangeStart, rangeEnd];
 
   const report: eslint.Rule.ReportDescriptor = {
-    node: currentContext.node,
-    loc: currentContext.comment.loc,
+    node: context.node,
+    loc: {
+      start: {
+        line: previousLine.index,
+        column: 0
+      },
+      end: {
+        line: currentLine.index,
+        column: currentLine.text.length
+      }
+    },
     messageId: 'underflow',
     data: {
-      line_length: `${text.length}`,
-      max_length: `${currentContext.max_line_length}`
+      line_length: `${currentLine.text.length}`,
+      max_length: `${context.max_line_length}`
     },
     fix: function (fixer) {
-      const adjustment = edge === -1 ? 2 : 3;
-      const range: eslint.AST.Range = [
-        // TODO: this feels wrong, this assumes comment starts at start of line?
-        currentContext.comment.range[0] + currentContext.code.lines[line.index - 1].length,
-        currentContext.comment.range[0] + currentContext.code.lines[line.index - 1].length + 1 +
-          currentContext.code.lines[line.index].indexOf('//') + adjustment
-      ];
-
-      return fixer.replaceTextRange(range, ' ');
+      return fixer.replaceTextRange(replacementRange, replacementText);
     }
   };
 

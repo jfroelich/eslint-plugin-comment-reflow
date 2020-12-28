@@ -37,7 +37,6 @@ function analyzeProgram(context: eslint.Rule.RuleContext, node: estree.Node) {
 
   const code = context.getSourceCode();
   const comments = code.getAllComments();
-  let previousSingleCommentContext: CommentContext;
   let previousSingleLine: CommentLineDesc;
 
   for (let index = 0; index < comments.length; index++) {
@@ -58,13 +57,11 @@ function analyzeProgram(context: eslint.Rule.RuleContext, node: estree.Node) {
       const currentLine = parseLine(commentContext.code, commentContext.comment,
         commentContext.comment.loc.start.line);
 
-      const singleLineReport = checkLineComment(previousSingleCommentContext, previousSingleLine,
-        commentContext, currentLine);
+      const singleLineReport = checkLineComment(commentContext, previousSingleLine, currentLine);
       if (singleLineReport) {
         return context.report(singleLineReport);
       }
 
-      previousSingleCommentContext = commentContext;
       previousSingleLine = currentLine;
     } else {
       // ignore shebang

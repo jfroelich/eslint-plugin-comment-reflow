@@ -2,7 +2,7 @@ import eslint from 'eslint';
 import { CommentContext } from '../comment-context';
 import { CommentLineDesc } from '../comment-line-desc';
 import { findContentBreak } from '../find-content-break';
-import { tokenize } from './tokenize';
+import { tokenize } from '../tokenize';
 
 export function checkBlockUnderflow(context: CommentContext, previousLine: CommentLineDesc,
   currentLine: CommentLineDesc) {
