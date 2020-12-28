@@ -1,7 +1,7 @@
 import eslint from 'eslint';
 import { CommentContext } from '../comment-context';
 import { CommentLine } from '../comment-line';
-import { findContentBreak } from '../find-content-break';
+import { getRegionLength } from '../get-region-length';
 import { tokenize } from '../tokenize';
 
 export function checkBlockUnderflow(context: CommentContext, previousLine: CommentLine,
@@ -49,39 +49,18 @@ export function checkBlockUnderflow(context: CommentContext, previousLine: Comme
     return;
   }
 
-  // TODO: there is no point to finding the content break in the case of underflow. Not sure what I
-  // was thinking earlier. Take a look at how I solved this in the line underflow logic.
+  const previousLineEndPosition = getRegionLength(previousLine, 'suffix');
 
-  // Find the breakpoint in the previous line. This tries to find a breaking space earlier in the
-  // line. If not found, then this is -1. However, -1 does not indicate that the content is at the
-  // threshold. -1 only means no earlier breakpoint found.
-
-  const previousLineBreakpoint = findContentBreak(previousLine, context.max_line_length);
-
-  let effectivePreviousLineBreakpoint;
-  if (previousLineBreakpoint === -1) {
-    // If we did not find an early breakpoint, then the effective breakpoint is the character at the
-    // end of the suffix.
-    effectivePreviousLineBreakpoint = Math.min(context.max_line_length,
-      previousLine.lead_whitespace.length + previousLine.open.length + previousLine.prefix.length +
-      previousLine.content.length + previousLine.suffix.length);
-  } else {
-    effectivePreviousLineBreakpoint = previousLineBreakpoint;
-  }
-
-  // Check if the effective breakpoint in the previous line leaves room for any amount of additional
-  // content. We add 1 to account for the extra space we will insert.
-
-  if (effectivePreviousLineBreakpoint + 1 >= context.max_line_length) {
+  if (previousLineEndPosition + 1 >= context.max_line_length) {
     return;
   }
+
+  let spaceRemaining = context.max_line_length - previousLineEndPosition;
 
   // Split the current content into word and space tokens. We know the first token is a word because
   // we know that content does not include leading whitespace and is not empty.
 
   const tokens = tokenize(currentLine.content);
-
-  let spaceRemaining = context.max_line_length - effectivePreviousLineBreakpoint;
   const fittingTokens = [];
   for (const token of tokens) {
     if (token.length < spaceRemaining) {
