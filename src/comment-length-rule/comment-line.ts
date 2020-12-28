@@ -76,7 +76,8 @@ type Region = keyof Pick<CommentLine,
   'lead_whitespace' | 'open' | 'close' | 'prefix' | 'content' | 'suffix' | 'close'>;
 
 /**
- * Returns the length of the text up to the start or end of the given region.
+ * Returns the length of the text in the given line up to the start or end of the given region. If
+ * inclusive is true then this is up to the end of the region.
  */
 export function getRegionLength(line: CommentLine, region: Region, inclusive = true) {
   switch (region) {
