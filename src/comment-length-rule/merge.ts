@@ -15,12 +15,15 @@ export function merge(context: CommentContext, type: estree.Comment['type'], pre
     return;
   }
 
-  if (previous.content.length === 0 || current.content.length === 0) {
+  if (!previous.content || !current.content) {
+    return;
+  }
+
+  if (previous.directive || current.directive || current.fixme) {
     return;
   }
 
   const previousLineEndPosition = getRegionLength(previous, 'suffix');
-
   if (previousLineEndPosition >= context.max_line_length) {
     return;
   }
@@ -34,30 +37,20 @@ export function merge(context: CommentContext, type: estree.Comment['type'], pre
     return;
   }
 
-  if (previous.directive.length > 0 || current.directive.length > 0) {
-    return;
-  }
-
-  if (current.fixme.length > 0) {
-    return;
-  }
-
-  // add +1 for the extra space we will insert
-
-  if (previousLineEndPosition + 1 >= context.max_line_length) {
-    return;
-  }
-
-  // We know the first token is a word because we know that content does not include leading
-  // whitespace and is not empty.
-
   const tokens = tokenize(current.content);
+
+  const isHyphenMerge = (tokens[0] === '-' && !previous.content.endsWith('-')) ||
+    (tokens[0] !== '-' && previous.content.endsWith('-'));
 
   let spaceRemaining = context.max_line_length - previousLineEndPosition;
 
+  if (!isHyphenMerge) {
+    spaceRemaining--;
+  }
+
   const fittingTokens = [];
   for (const token of tokens) {
-    if (token.length < spaceRemaining) {
+    if (token.length <= spaceRemaining) {
       fittingTokens.push(token);
       spaceRemaining -= token.length;
     } else {
@@ -69,30 +62,31 @@ export function merge(context: CommentContext, type: estree.Comment['type'], pre
     return;
   }
 
-  let tokenText = '';
-
   // Merging the tokens can result in either whitespace ending the previous line or starting the
   // current line. We want to exclude this one whitespace token. We could leave it up to the
   // no-trailing-spaces rule but it seems inefficient. I think taking a destructive action is better
   // here. Keep in mind that the only way back is undo, since by trimming and substituting one or
   // more spaces for a single space, we lose the original spacing. If the number of tokens being
   // moved is even, that means the last token being moved is whitespace. In that case, build the
-  // token text out of all tokens except for that final whitespace token.
+  // token text out of all tokens except for that final whitespace token. We cannot use the is-even
+  // trick to detect where the whitespace is because of hyphens.
 
-  const lastFitTokenIsWhiteSpace = fittingTokens.length % 2 === 0;
+  let tokenText: string;
+  const lastFitTokenIsWhiteSpace = fittingTokens[fittingTokens.length - 1].trim().length === 0;
   if (lastFitTokenIsWhiteSpace) {
     tokenText = fittingTokens.slice(0, -1).join('');
   } else {
     tokenText = fittingTokens.join('');
   }
 
-  // Compose the replacement text. We add in a space since we are removing a line break and do not
-  // want to end up merging two non-whitespace tokens into one.
+  // Compose the replacement text. If we are merging hyphens then we want to merge the tokens
+  // immediately after the end of the previous line content. If we are not merging hyphens, then we
+  // want to insert an extra space to prevent the adjacency.
 
-  let replacementText = ' ' + tokenText;
+  let replacementText = isHyphenMerge ? tokenText : ' ' + tokenText;
 
-  // If we are not merging the entire line, then we want to append the start of the next comment
-  // into the replacement text.
+  // If we are not merging the entire current line into the previous line, then we want to append
+  // the start of the next comment into the replacement text.
 
   if (tokenText.length < current.content.length) {
     const open = type === 'Block' ? '' : '//';
@@ -105,6 +99,9 @@ export function merge(context: CommentContext, type: estree.Comment['type'], pre
   // of space. If the last token to move to the previous line is not whitespace, then there may be
   // leading whitespace leftover on the current line that we want to exclude. We will exclude by
   // artificially extending the replacement range end index by the length of that whitespace token.
+
+  // TODO: this feels wrong now with the hyphen change to tokenize, i have managed to confuse myself
+  // regarding what this second branch is even doing.
 
   let whitespaceExtensionLength = 0;
   if (lastFitTokenIsWhiteSpace) {
@@ -124,8 +121,6 @@ export function merge(context: CommentContext, type: estree.Comment['type'], pre
     column: getRegionLength(current, 'prefix') + tokenText.length + whitespaceExtensionLength
   });
 
-  const replacementRange: eslint.AST.Range = [rangeStart, rangeEnd];
-
   const report: eslint.Rule.ReportDescriptor = {
     node: context.node,
     loc: {
@@ -144,7 +139,7 @@ export function merge(context: CommentContext, type: estree.Comment['type'], pre
       max_length: `${context.max_line_length}`
     },
     fix: function (fixer) {
-      return fixer.replaceTextRange(replacementRange, replacementText);
+      return fixer.replaceTextRange([rangeStart, rangeEnd], replacementText);
     }
   };
 
