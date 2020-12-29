@@ -2,11 +2,10 @@ import assert from 'assert';
 import eslint from 'eslint';
 import estree from 'estree';
 import { checkBlockOverflow } from './block-overflow';
-import { checkBlockUnderflow } from './block-underflow';
 import { CommentContext } from './comment-context';
 import { CommentLine } from './comment-line';
 import { checkLineOverflow } from './line-overflow';
-import { checkLineUnderflow } from './line-underflow';
+import { merge } from './merge';
 import { parseLine } from './parse-line';
 
 export const commentLengthRule: eslint.Rule.RuleModule = {
@@ -14,8 +13,8 @@ export const commentLengthRule: eslint.Rule.RuleModule = {
     type: 'layout',
     fixable: 'whitespace',
     messages: {
-      overflow: 'Comment line should wrap',
-      underflow: 'Comment lines should be merged'
+      split: 'Comment line should be split',
+      merge: 'Comment lines should be merged'
     }
   },
   create: createCommentLengthRule
@@ -39,7 +38,7 @@ function analyzeProgram(context: eslint.Rule.RuleContext, node: estree.Node) {
 
   const code = context.getSourceCode();
   const comments = code.getAllComments();
-  let previousLine: CommentLine;
+  let previousSingleLine: CommentLine;
 
   for (const comment of comments) {
     const commentContext: CommentContext = {
@@ -68,13 +67,13 @@ function analyzeProgram(context: eslint.Rule.RuleContext, node: estree.Node) {
 
         let report = checkBlockOverflow(commentContext, comment, currentLine);
         if (report) {
-          return report;
+          return context.report(report);
         }
 
         if (previousLine) {
-          report = checkBlockUnderflow(commentContext, previousLine, currentLine);
+          report = merge(commentContext, comment.type, previousLine, currentLine);
           if (report) {
-            return report;
+            return context.report(report);
           }
         }
 
@@ -83,19 +82,19 @@ function analyzeProgram(context: eslint.Rule.RuleContext, node: estree.Node) {
      } else if (comment.type === 'Line') {
       const currentLine = parseLine(code, comment, comment.loc.start.line);
 
-      const overflowReport = checkLineOverflow(commentContext, currentLine);
-        if (overflowReport) {
-          return overflowReport;
-        }
+      let report = checkLineOverflow(commentContext, currentLine);
+      if (report) {
+        return context.report(report);
+      }
 
-        if (previousLine) {
-          const underflowReport = checkLineUnderflow(commentContext, previousLine, currentLine);
-          if (underflowReport) {
-            return underflowReport;
-          }
+      if (previousSingleLine) {
+        report = merge(commentContext, comment.type, previousSingleLine, currentLine);
+        if (report) {
+          return context.report(report);
         }
+      }
 
-      previousLine = currentLine;
+      previousSingleLine = currentLine;
     }
   }
 }

@@ -129,7 +129,7 @@ export function checkBlockOverflow(context: CommentContext, comment: estree.Comm
         column: line.text.length
       }
     },
-    messageId: 'overflow',
+    messageId: 'split',
     data: {
       line_length: `${line.text.length}`,
       max_length: `${context.max_line_length}`

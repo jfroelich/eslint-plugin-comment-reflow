@@ -1,60 +1,57 @@
 import eslint from 'eslint';
+import type estree from 'estree';
 import { CommentContext } from './comment-context';
 import { CommentLine } from './comment-line';
 import { getRegionLength } from "./get-region-length";
 import { tokenize } from './tokenize';
 
-export function checkLineUnderflow(context: CommentContext, previousLine: CommentLine,
-  currentLine: CommentLine) {
-  // If the previous line is not immediately preceding the current line then we do not consider
-  // underflow. This can happen because the caller passes in any previous line comment, not only the
-  // immediately previous line comment.
-
-  if (currentLine.index - previousLine.index !== 1) {
+export function merge(context: CommentContext, type: estree.Comment['type'], previous: CommentLine,
+  current: CommentLine) {
+  if (context.in_md_fence || context.in_jsdoc_example) {
     return;
   }
 
-  // If either line has no content then do not consider underflow. These are basically empty lines
-  // in a comment, which is routine. Assume the author wants to keep lines separate.
-
-  if (previousLine.content.length === 0 || currentLine.content.length === 0) {
+  if (current.index - previous.index !== 1) {
     return;
   }
 
-  // If the length of the previous line is greater than or equal to the threshold then the previous
-  // line does not underflow. Note that here we count the suffix, which is the trailing whitespace.
-  // It is ambiguous whether trailing whitespace is deemed content. Perhaps there should be a config
-  // option. For now, to be safe, we assume that if the author wants to leave in trailing whitespace
-  // that it is intentional and part of the content and that if they wanted to avoid this problem
-  // they would use the no-trailing-spaces rule. Keep in mind this can lead to strange things, where
-  // it looks like two lines should be merged, but they should not be, because of the suffix. I
-  // myself keep screwing this up thinking there is an error, but this is not an error.
-
-  if (getRegionLength(previousLine, 'suffix') >= context.max_line_length) {
+  if (previous.content.length === 0 || current.content.length === 0) {
     return;
   }
 
-  if (previousLine.directive.length > 0 || currentLine.directive.length > 0) {
+  const previousLineEndPosition = getRegionLength(previous, 'suffix');
+
+  if (previousLineEndPosition >= context.max_line_length) {
     return;
   }
 
-  if (currentLine.fixme.length > 0) {
+  if (type === 'Block' && (current.markup.startsWith('*') || current.markup.startsWith('-') ||
+    /^\d/.test(current.markup))) {
     return;
   }
 
-  const previousLineEndPosition = getRegionLength(previousLine, 'suffix');
+  if (type === 'Block' && current.markup.startsWith('@')) {
+    return;
+  }
 
-  // Check if the ending position in the previous line leaves room for any amount of additional
-  // content. We add 1 to account for the extra space we will insert.
+  if (previous.directive.length > 0 || current.directive.length > 0) {
+    return;
+  }
+
+  if (current.fixme.length > 0) {
+    return;
+  }
+
+  // add +1 for the extra space we will insert
 
   if (previousLineEndPosition + 1 >= context.max_line_length) {
     return;
   }
 
-  // Split the current content into word and space tokens. We know the first token is a word because
-  // we know that content does not include leading whitespace and is not empty.
+  // We know the first token is a word because we know that content does not include leading
+  // whitespace and is not empty.
 
-  const tokens = tokenize(currentLine.content);
+  const tokens = tokenize(current.content);
 
   let spaceRemaining = context.max_line_length - previousLineEndPosition;
 
@@ -97,8 +94,9 @@ export function checkLineUnderflow(context: CommentContext, previousLine: Commen
   // If we are not merging the entire line, then we want to append the start of the next comment
   // into the replacement text.
 
-  if (tokenText.length < currentLine.content.length) {
-    replacementText += '\n' + currentLine.lead_whitespace + '//' + currentLine.prefix;
+  if (tokenText.length < current.content.length) {
+    const open = type === 'Block' ? '' : '//';
+    replacementText += '\n' + current.lead_whitespace + open + current.prefix;
   }
 
   // Merging the tokens may result in either a whitespace token ending the previous line or starting
@@ -117,13 +115,13 @@ export function checkLineUnderflow(context: CommentContext, previousLine: Commen
   }
 
   const rangeStart = context.code.getIndexFromLoc({
-    line: previousLine.index,
-    column: getRegionLength(previousLine, 'content')
+    line: previous.index,
+    column: getRegionLength(previous, 'content')
   });
 
   const rangeEnd = context.code.getIndexFromLoc({
-    line: currentLine.index,
-    column: getRegionLength(currentLine, 'prefix') + tokenText.length + whitespaceExtensionLength
+    line: current.index,
+    column: getRegionLength(current, 'prefix') + tokenText.length + whitespaceExtensionLength
   });
 
   const replacementRange: eslint.AST.Range = [rangeStart, rangeEnd];
@@ -132,17 +130,17 @@ export function checkLineUnderflow(context: CommentContext, previousLine: Commen
     node: context.node,
     loc: {
       start: {
-        line: previousLine.index,
-        column: 0
+        line: previous.index,
+        column: previous.lead_whitespace.length + previous.open.length + previous.prefix.length
       },
       end: {
-        line: currentLine.index,
-        column: currentLine.text.length
+        line: current.index,
+        column: current.text.length
       }
     },
-    messageId: 'underflow',
+    messageId: 'merge',
     data: {
-      line_length: `${currentLine.text.length}`,
+      line_length: `${current.text.length}`,
       max_length: `${context.max_line_length}`
     },
     fix: function (fixer) {
