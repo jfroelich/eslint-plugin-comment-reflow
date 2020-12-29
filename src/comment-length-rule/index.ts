@@ -89,10 +89,6 @@ function analyzeProgram(context: eslint.Rule.RuleContext, node: estree.Node) {
       }
 
       previousLine = currentLine;
-    } else {
-      // Ignore shebang. A shebang should only be the first comment in a file. I am unclear on
-      // whether eslint even reveals it via getAllComments. In any event, we never want to check it
-      // for split/merge. So we support shebang comments by properly ignoring them.
     }
   }
 }
