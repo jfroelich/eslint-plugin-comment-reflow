@@ -8,6 +8,14 @@ export function checkLineComment(context: CommentContext, previousLine: CommentL
   currentLine: CommentLine) {
   assert(context.comment.type === 'Line', `Line ${currentLine.index} is not type "Line"`);
 
+  // Ignore trailing line comments. Eventually this can be supported but doing so complicates the
+  // logic so for now just ignore.
+
+  const previousToken = context.code.getTokenBefore(context.comment, { includeComments: true });
+  if (previousToken && previousToken.loc.end.line === context.comment.loc.start.line) {
+    return;
+  }
+
   const overflowReport = checkLineOverflow(context, currentLine);
   if (overflowReport) {
     return overflowReport;
