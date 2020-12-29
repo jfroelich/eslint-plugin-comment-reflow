@@ -1,9 +1,8 @@
 /**
- * Split a string into tokens. Returns an array of strings that contains both word tokens and
- * whitespace tokens in order of appearance.
+ * Split a string into an array of word, hyphen, and space tokens.
  */
 export function tokenize(string: string) {
-  const matches = string.matchAll(/\S+|\s+/g);
+  const matches = string.matchAll(/[^\s-]+|(?:\s+|-)/g);
   const tokens: string[] = [];
 
   for (const match of matches) {
