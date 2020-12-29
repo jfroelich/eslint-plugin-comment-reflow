@@ -224,6 +224,10 @@ function parseFixme(content: string) {
     return 'TODO';
   }
 
+  if (content.startsWith('NOTE: ')) {
+    return 'NOTE';
+  }
+
   if (content.startsWith('BUG: ')) {
     return 'BUG';
   }
