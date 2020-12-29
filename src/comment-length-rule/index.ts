@@ -1,12 +1,11 @@
 import assert from 'assert';
 import eslint from 'eslint';
 import estree from 'estree';
-import { checkBlockOverflow } from './block-overflow';
 import { CommentContext } from './comment-context';
 import { CommentLine } from './comment-line';
-import { checkLineOverflow } from './line-overflow';
 import { merge } from './merge';
 import { parseLine } from './parse-line';
+import { split } from './split';
 
 export const commentLengthRule: eslint.Rule.RuleModule = {
   meta: {
@@ -65,7 +64,7 @@ function analyzeProgram(context: eslint.Rule.RuleContext, node: estree.Node) {
       for (let line = loc.start.line, previousLine: CommentLine; line <= loc.end.line; line++) {
         const currentLine = parseLine(commentContext.code, comment, line);
 
-        let report = checkBlockOverflow(commentContext, comment, currentLine);
+        let report = split(commentContext, comment, currentLine);
         if (report) {
           return context.report(report);
         }
@@ -82,7 +81,7 @@ function analyzeProgram(context: eslint.Rule.RuleContext, node: estree.Node) {
      } else if (comment.type === 'Line') {
       const currentLine = parseLine(code, comment, comment.loc.start.line);
 
-      let report = checkLineOverflow(commentContext, currentLine);
+      let report = split(commentContext, comment, currentLine);
       if (report) {
         return context.report(report);
       }
