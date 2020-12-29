@@ -14,9 +14,6 @@ export function checkLineUnderflow(context: CommentContext, previousLine: Commen
     return;
   }
 
-  // TODO: if the two lines have different prefix lengths then do we prevent underflow? is that
-  // an author's intent to say two lines are different or is that laziness?
-
   // If either line has no content then do not consider underflow. These are basically empty lines
   // in a comment, which is routine. Assume the author wants to keep lines separate.
 
