@@ -1,10 +1,10 @@
 import assert from 'assert';
 import eslint from 'eslint';
 import estree from 'estree';
-import { checkBlockComment } from './block-comment/block-comment';
+import { checkBlockComment } from './block-comment';
 import { CommentContext } from './comment-context';
 import { CommentLine } from './comment-line';
-import { checkLineComment } from './line-comment/line-comment';
+import { checkLineComment } from './line-comment';
 import { parseLine } from './parse-line';
 
 export const commentLengthRule: eslint.Rule.RuleModule = {

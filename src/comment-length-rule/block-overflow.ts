@@ -1,7 +1,7 @@
 import type eslint from 'eslint';
-import { CommentContext } from '../comment-context';
-import { CommentLine } from '../comment-line';
-import { findContentBreak } from '../find-content-break';
+import { CommentContext } from './comment-context';
+import { CommentLine } from './comment-line';
+import { findContentBreak } from './find-content-break';
 
 export function checkBlockOverflow(context: CommentContext, line: CommentLine) {
   if (!updatePreformattedState(context, line)) {

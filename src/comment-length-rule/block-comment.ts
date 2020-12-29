@@ -1,8 +1,8 @@
-import { CommentContext } from '../comment-context';
-import { CommentLine } from '../comment-line';
-import { parseLine } from "../parse-line";
 import { checkBlockOverflow } from './block-overflow';
 import { checkBlockUnderflow } from './block-underflow';
+import { CommentContext } from './comment-context';
+import { CommentLine } from './comment-line';
+import { parseLine } from "./parse-line";
 
 /**
  * Generate a fix for the first error found in block comment.

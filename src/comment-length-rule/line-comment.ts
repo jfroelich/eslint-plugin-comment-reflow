@@ -1,6 +1,6 @@
 import assert from 'assert';
-import { CommentContext } from '../comment-context';
-import { CommentLine } from '../comment-line';
+import { CommentContext } from './comment-context';
+import { CommentLine } from './comment-line';
 import { checkLineOverflow } from './line-overflow';
 import { checkLineUnderflow } from './line-underflow';
 

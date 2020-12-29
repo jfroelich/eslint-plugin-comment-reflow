@@ -1,7 +1,7 @@
 import eslint from 'eslint';
-import { CommentContext } from '../comment-context';
-import { CommentLine } from '../comment-line';
-import { findContentBreak } from '../find-content-break';
+import { CommentContext } from './comment-context';
+import { CommentLine } from './comment-line';
+import { findContentBreak } from './find-content-break';
 
 export function checkLineOverflow(context: CommentContext, line: CommentLine) {
   // If the entire line, including trailing whitespace in case the trailing whitespace rule is off,
