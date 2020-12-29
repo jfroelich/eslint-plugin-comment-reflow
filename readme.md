@@ -24,6 +24,7 @@ is split, the new line will also be indented.
 }
 ```
 Using `eslint-plugin-comment-reflow` as the plugin name also works.
+
 3. Add the rule to the eslint config:
 ```
 {
@@ -36,6 +37,7 @@ Using `eslint-plugin-comment-reflow` as the plugin name also works.
 }
 ```
 The second element of the array is the point at which to wrap lines.
+
 4. Optionally configure some other rules. It is highly recommended to turn on `no-trailing-spaces`
 and to use the same maximum length as `max-len`.
 5. Due to some oddities in VSCode, you may need to reload the UI in VSCode or restart VSCode.
