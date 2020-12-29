@@ -2,7 +2,6 @@ import type eslint from 'eslint';
 import type estree from 'estree';
 import { CommentContext } from './comment-context';
 import { CommentLine } from './comment-line';
-import { findContentBreak } from './find-content-break';
 import { getRegionLength } from './get-region-length';
 
 export function split(context: CommentContext, comment: estree.Comment, line: CommentLine) {
@@ -46,6 +45,8 @@ export function split(context: CommentContext, comment: estree.Comment, line: Co
 
   const contentBreakPosition = findContentBreak(line, threshold);
 
+  console.log('content break position:', contentBreakPosition);
+
   let lineBreakPosition = -1;
   if (contentBreakPosition > 0) {
     lineBreakPosition = contentBreakPosition;
@@ -56,6 +57,8 @@ export function split(context: CommentContext, comment: estree.Comment, line: Co
   } else {
     lineBreakPosition = threshold;
   }
+
+  console.log('line break position:', lineBreakPosition);
 
   const lineStartIndex = context.code.getIndexFromLoc({ line: line.index, column: 0 });
   const insertAfterRange: eslint.AST.Range = [0, lineStartIndex + lineBreakPosition];
@@ -161,4 +164,46 @@ function updatePreformattedState(context: CommentContext, comment: estree.Commen
 
   // Consider overflow.
   return true;
+}
+
+/**
+ * Return the position where to break the text or -1. This only searches in a subregion of the text
+ * so as to not match whitespace in other places.
+ */
+export function findContentBreak(line: CommentLine, threshold: number) {
+  if (getRegionLength(line, 'suffix') <= threshold) {
+    return -1;
+  }
+
+  // Ugly fix for when there is a space just after the threshold but not just before it. In this
+  // case we want to use this space as the break point and not some preceding space.
+
+  if (line.text.charAt(threshold - 1).trim() && !line.text.charAt(threshold).trim()) {
+    return threshold;
+  }
+
+  // Determine the search space for searching for space.
+
+  const regionStart = getRegionLength(line, 'prefix') + line.markup.length +
+    line.markup_space.length;
+  const regionEnd = Math.min(threshold, getRegionLength(line, 'content'));
+  const region = line.text.slice(regionStart, regionEnd);
+
+  // Find the last space in the last sequence of spaces.
+
+  const endPos = region.lastIndexOf(' ');
+
+  // Find the first space in the sequence of spaces.
+
+  let startPos = endPos;
+  if (startPos > -1) {
+    while (region.charAt(startPos - 1) === ' ') {
+      startPos--;
+    }
+  }
+
+  // Return the position in the search space translated to the position in the line.
+
+  return startPos === -1 ? startPos : line.lead_whitespace.length + line.open.length +
+    line.prefix.length + line.markup.length + line.markup_space.length + startPos;
 }
