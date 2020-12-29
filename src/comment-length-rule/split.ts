@@ -45,8 +45,6 @@ export function split(context: CommentContext, comment: estree.Comment, line: Co
 
   const contentBreakPosition = findContentBreak(line, threshold);
 
-  console.log('content break position:', contentBreakPosition);
-
   let lineBreakPosition = -1;
   if (contentBreakPosition > 0) {
     lineBreakPosition = contentBreakPosition;
@@ -57,8 +55,6 @@ export function split(context: CommentContext, comment: estree.Comment, line: Co
   } else {
     lineBreakPosition = threshold;
   }
-
-  console.log('line break position:', lineBreakPosition);
 
   const lineStartIndex = context.code.getIndexFromLoc({ line: line.index, column: 0 });
   const insertAfterRange: eslint.AST.Range = [0, lineStartIndex + lineBreakPosition];
