@@ -1,10 +1,12 @@
 import type eslint from 'eslint';
+import type estree from 'estree';
 import { CommentContext } from './comment-context';
 import { CommentLine } from './comment-line';
 import { findContentBreak } from './find-content-break';
 
-export function checkBlockOverflow(context: CommentContext, line: CommentLine) {
-  if (!updatePreformattedState(context, line)) {
+export function checkBlockOverflow(context: CommentContext, comment: estree.Comment,
+  line: CommentLine) {
+  if (!updatePreformattedState(context, comment, line)) {
     return;
   }
 
@@ -36,10 +38,10 @@ export function checkBlockOverflow(context: CommentContext, line: CommentLine) {
   // rule. We have to specially handle when we are at the final line because the suffix trailing
   // whitespace is a part of the comment.
 
-  if (line.index < context.comment.loc.end.line && line.lead_whitespace.length + line.open.length +
+  if (line.index < comment.loc.end.line && line.lead_whitespace.length + line.open.length +
     line.prefix.length + line.content.length <= context.max_line_length) {
     return;
-  } else if (line.index === context.comment.loc.end.line && line.lead_whitespace.length +
+  } else if (line.index === comment.loc.end.line && line.lead_whitespace.length +
     line.open.length + line.prefix.length + line.content.length + line.suffix.length +
     line.close.length <= context.max_line_length) {
     return;
@@ -58,8 +60,8 @@ export function checkBlockOverflow(context: CommentContext, line: CommentLine) {
   let lineBreakPosition = -1;
   if (contentBreakPosition > 0) {
     lineBreakPosition = contentBreakPosition;
-  } else if (line.index === context.comment.loc.end.line &&
-    context.comment.loc.end.column - 1 === context.max_line_length) {
+  } else if (line.index === comment.loc.end.line &&
+    comment.loc.end.column - 1 === context.max_line_length) {
     // Avoid breaking right in the middle of the close
     lineBreakPosition = context.max_line_length - 1;
   } else {
@@ -94,18 +96,18 @@ export function checkBlockOverflow(context: CommentContext, line: CommentLine) {
 
   let textToInsert = '\n';
 
-  if (line.index === context.comment.loc.start.line &&
-    line.index === context.comment.loc.end.line) {
+  if (line.index === comment.loc.start.line &&
+    line.index === comment.loc.end.line) {
     textToInsert += line.text.slice(0, line.lead_whitespace.length);
     if (line.prefix.startsWith('*')) {
       textToInsert += ' ' + line.prefix + ''.padEnd(line.markup.length + line.markup_space.length);
     }
-  } else if (line.index === context.comment.loc.start.line) {
+  } else if (line.index === comment.loc.start.line) {
     textToInsert += line.text.slice(0, line.lead_whitespace.length);
     if (line.prefix.startsWith('*')) {
       textToInsert += ' ' + line.prefix + ''.padEnd(line.markup.length + line.markup_space.length);
     }
-  } else if (line.index === context.comment.loc.end.line) {
+  } else if (line.index === comment.loc.end.line) {
     textToInsert += line.text.slice(0, line.lead_whitespace.length);
     if (line.prefix.startsWith('*')) {
       textToInsert += line.prefix + ''.padEnd(line.markup.length + line.markup_space.length);
@@ -142,9 +144,10 @@ export function checkBlockOverflow(context: CommentContext, line: CommentLine) {
  * Detects transitions into and out of a preformatted state in a block comment. Returns whether the
  * text should still be considered for overflow.
  */
-function updatePreformattedState(context: CommentContext, line: CommentLine) {
+function updatePreformattedState(context: CommentContext, comment: estree.Comment,
+  line: CommentLine) {
   if (context.in_md_fence) {
-    if (line.index > context.comment.loc.start.line && line.content.startsWith('```')) {
+    if (line.index > comment.loc.start.line && line.content.startsWith('```')) {
       // Exiting markdown fence section. Do not consider overflow.
       context.in_md_fence = false;
       return false;
@@ -165,11 +168,11 @@ function updatePreformattedState(context: CommentContext, line: CommentLine) {
       // Remaining in jsdoc example section. Do not consider overflow.
       return false;
     }
-  } else if (line.index > context.comment.loc.start.line && line.content.startsWith('```')) {
+  } else if (line.index > comment.loc.start.line && line.content.startsWith('```')) {
     // Entering markdown fence section. Do not consider overflow.
     context.in_md_fence = true;
     return false;
-  } else if (line.index > context.comment.loc.start.line && line.content.startsWith('@example')) {
+  } else if (line.index > comment.loc.start.line && line.content.startsWith('@example')) {
     // Entering jsdoc example section. Do not consider overflow.
     context.in_jsdoc_example = true;
     return false;

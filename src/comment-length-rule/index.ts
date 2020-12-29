@@ -43,20 +43,18 @@ function analyzeProgram(context: eslint.Rule.RuleContext, node: estree.Node) {
     const commentContext: CommentContext = {
       node,
       code,
-      comment,
       max_line_length: maxLineLength
     };
 
-    if (commentContext.comment.type === 'Block') {
-      const blockReport = checkBlockComment(commentContext);
+    if (comment.type === 'Block') {
+      const blockReport = checkBlockComment(commentContext, comment);
       if (blockReport) {
         return context.report(blockReport);
       }
-    } else if (commentContext.comment.type === 'Line') {
-      const currentLine = parseLine(commentContext.code, commentContext.comment,
-        commentContext.comment.loc.start.line);
+    } else if (comment.type === 'Line') {
+      const currentLine = parseLine(code, comment, comment.loc.start.line);
 
-      const singleLineReport = checkLineComment(commentContext, previousLine, currentLine);
+      const singleLineReport = checkLineComment(commentContext, comment, previousLine, currentLine);
       if (singleLineReport) {
         return context.report(singleLineReport);
       }
