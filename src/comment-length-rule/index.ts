@@ -48,17 +48,44 @@ function analyzeProgram(context: eslint.Rule.RuleContext, node: estree.Node) {
       max_line_length: maxLineLength
     };
 
+    const previousToken = code.getTokenBefore(comment, { includeComments: true });
+    if (previousToken && previousToken.loc.end.line === comment.loc.start.line) {
+      continue;
+    }
+
+    const nextToken = code.getTokenAfter(comment, { includeComments: true });
+    if (nextToken && comment.loc.end.line === nextToken.loc.start.line) {
+      continue;
+    }
+
     if (comment.type === 'Block') {
-      const blockReport = checkBlockComment(commentContext, comment);
-      if (blockReport) {
-        return context.report(blockReport);
+      commentContext.in_md_fence = false;
+      commentContext.in_jsdoc_example = false;
+      const loc = comment.loc;
+
+      for (let line = loc.start.line, previousLine: CommentLine; line <= loc.end.line; line++) {
+        const currentLine = parseLine(commentContext.code, comment, line);
+
+        let report = checkBlockOverflow(commentContext, comment, currentLine);
+        if (report) {
+          return report;
+        }
+
+        if (previousLine) {
+          report = checkBlockUnderflow(commentContext, previousLine, currentLine);
+          if (report) {
+            return report;
+          }
+        }
+
+        previousLine = currentLine;
       }
-    } else if (comment.type === 'Line') {
+     } else if (comment.type === 'Line') {
       const currentLine = parseLine(code, comment, comment.loc.start.line);
 
-      const singleLineReport = checkLineComment(commentContext, comment, previousLine, currentLine);
-      if (singleLineReport) {
-        return context.report(singleLineReport);
+      const report = checkLineComment(commentContext, comment, previousLine, currentLine);
+      if (report) {
+        return context.report(report);
       }
 
       previousLine = currentLine;
@@ -67,40 +94,6 @@ function analyzeProgram(context: eslint.Rule.RuleContext, node: estree.Node) {
       // whether eslint even reveals it via getAllComments. In any event, we never want to check it
       // for split/merge. So we support shebang comments by properly ignoring them.
     }
-  }
-}
-
-function checkBlockComment(context: CommentContext, comment: estree.Comment) {
-  const previousToken = context.code.getTokenBefore(comment, { includeComments: true });
-  if (previousToken && previousToken.loc.end.line === comment.loc.start.line) {
-    return;
-  }
-
-  const nextToken = context.code.getTokenAfter(comment, { includeComments: true });
-  if (nextToken && comment.loc.end.line === nextToken.loc.start.line) {
-    return;
-  }
-
-  context.in_md_fence = false;
-  context.in_jsdoc_example = false;
-
-  for (let loc = comment.loc, line = loc.start.line, previousLine: CommentLine;
-    line <= loc.end.line; line++) {
-    const currentLine = parseLine(context.code, comment, line);
-
-    let report = checkBlockOverflow(context, comment, currentLine);
-    if (report) {
-      return report;
-    }
-
-    if (previousLine) {
-      report = checkBlockUnderflow(context, previousLine, currentLine);
-      if (report) {
-        return report;
-      }
-    }
-
-    previousLine = currentLine;
   }
 }
 
