@@ -4,14 +4,6 @@ import { CommentLine } from './comment-line';
 import { getRegionLength } from "./get-region-length";
 import { tokenize } from './tokenize';
 
-/**
- * @todo passing in one context or another is weird, i think context maybe really should be unlinked
- * from comment? maybe all the comment specific parts inside context should be embedded instead
- * inside line, and the comment context then should be generic to all comments. right now we are
- * cheating with the promise to not access comment-specific data in the context
- * @todo there is ridiculous overlap with block overflow, maybe i need to think this, maybe what i
- * want is a general underflow check that is not specific to the comment type.
- */
 export function checkLineUnderflow(context: CommentContext, previousLine: CommentLine,
   currentLine: CommentLine) {
   // If the previous line is not immediately preceding the current line then we do not consider

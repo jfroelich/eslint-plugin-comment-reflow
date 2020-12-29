@@ -83,35 +83,19 @@ function analyzeProgram(context: eslint.Rule.RuleContext, node: estree.Node) {
      } else if (comment.type === 'Line') {
       const currentLine = parseLine(code, comment, comment.loc.start.line);
 
-      const report = checkLineComment(commentContext, comment, previousLine, currentLine);
-      if (report) {
-        return context.report(report);
-      }
+      const overflowReport = checkLineOverflow(commentContext, currentLine);
+        if (overflowReport) {
+          return overflowReport;
+        }
+
+        if (previousLine) {
+          const underflowReport = checkLineUnderflow(commentContext, previousLine, currentLine);
+          if (underflowReport) {
+            return underflowReport;
+          }
+        }
 
       previousLine = currentLine;
-    }
-  }
-}
-
-function checkLineComment(context: CommentContext, comment: estree.Comment,
-  previousLine: CommentLine, currentLine: CommentLine) {
-  // Ignore trailing line comments. Eventually this can be supported but doing so complicates the
-  // logic so for now just ignore.
-
-  const previousToken = context.code.getTokenBefore(comment, { includeComments: true });
-  if (previousToken && previousToken.loc.end.line === comment.loc.start.line) {
-    return;
-  }
-
-  const overflowReport = checkLineOverflow(context, currentLine);
-  if (overflowReport) {
-    return overflowReport;
-  }
-
-  if (previousLine) {
-    const underflowReport = checkLineUnderflow(context, previousLine, currentLine);
-    if (underflowReport) {
-      return underflowReport;
     }
   }
 }
