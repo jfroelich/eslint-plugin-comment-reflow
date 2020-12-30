@@ -141,72 +141,73 @@ export function endIndexOf(line: CommentLine, region: Region) {
   }
 }
 
-export function parseLine(code: eslint.SourceCode, comment: estree.Comment, line: number) {
-  const output = <CommentLine>{};
-  output.comment = comment;
-  output.index = line;
-  output.text = code.lines[line - 1];
+export function parseLine(code: eslint.SourceCode, comment: estree.Comment, index: number) {
+  const line = <CommentLine>{};
+  line.comment = comment;
+  line.index = index;
+  line.text = code.lines[index - 1];
 
-  const textTrimmedStart = output.text.trimStart();
-  output.lead_whitespace = output.text.slice(0, output.text.length - textTrimmedStart.length);
-
-  // TODO: support triple slashes, treat the 3rd slash a part of the prefix, and upon making this
-  // change make sure to fix the typescript <reference> check in line-comment handlers
+  const textTrimmedStart = line.text.trimStart();
+  line.lead_whitespace = line.text.slice(0, line.text.length - textTrimmedStart.length);
 
   if (comment.type === 'Line') {
-    output.open = '//';
-    output.close = '';
-    const afterOpen = output.text.slice(output.lead_whitespace.length + output.open.length);
+    line.open = '//';
+    line.close = '';
+
+    // TODO: support triple slashes, treat the 3rd slash a part of the prefix, and upon making this
+    // change make sure to fix the typescript <reference> check in line-comment handlers
+
+    const afterOpen = line.text.slice(line.lead_whitespace.length + line.open.length);
     const afterOpenTrimStart = afterOpen.trimStart();
     const afterOpenSpaceLen = afterOpen.length - afterOpenTrimStart.length;
-    output.prefix = output.text.slice(output.lead_whitespace.length + output.open.length,
-      output.lead_whitespace.length + output.open.length + afterOpenSpaceLen);
-    output.content = output.text.slice(output.lead_whitespace.length + output.open.length +
-      output.prefix.length).trimEnd();
-    output.suffix = output.text.slice(output.lead_whitespace.length + output.open.length +
-      output.prefix.length + output.content.length);
+    line.prefix = line.text.slice(line.lead_whitespace.length + line.open.length,
+      line.lead_whitespace.length + line.open.length + afterOpenSpaceLen);
+    line.content = line.text.slice(line.lead_whitespace.length + line.open.length +
+      line.prefix.length).trimEnd();
+    line.suffix = line.text.slice(line.lead_whitespace.length + line.open.length +
+      line.prefix.length + line.content.length);
   } else if (comment.type === 'Block') {
-    if (line === comment.loc.start.line && line === comment.loc.end.line) {
-      output.open = '/*';
-      output.close = '*/';
-      const prefixHaystack = output.text.slice(output.lead_whitespace.length + output.open.length,
-        comment.loc.end.column - output.close.length);
+    if (index === comment.loc.start.line && index === comment.loc.end.line) {
+      line.open = '/*';
+      line.close = '*/';
+      const prefixHaystack = line.text.slice(line.lead_whitespace.length + line.open.length,
+        comment.loc.end.column - line.close.length);
       const prefixMatch = /^\**\s*/.exec(prefixHaystack);
-      output.prefix = prefixMatch ? prefixMatch[0] : '';
-      output.content = output.text.slice(output.lead_whitespace.length + output.open.length +
-        output.prefix.length, comment.loc.end.column - output.close.length).trimEnd();
-      output.suffix = output.text.slice(output.lead_whitespace.length + output.open.length +
-        output.prefix.length + output.content.length, comment.loc.end.column - output.close.length);
-    } else if (line === comment.loc.start.line) {
-      output.open = '/*';
-      output.close = '';
-      const prefixHaystack = output.text.slice(output.lead_whitespace.length + output.open.length);
+      line.prefix = prefixMatch ? prefixMatch[0] : '';
+      line.content = line.text.slice(line.lead_whitespace.length + line.open.length +
+        line.prefix.length, comment.loc.end.column - line.close.length).trimEnd();
+      line.suffix = line.text.slice(line.lead_whitespace.length + line.open.length +
+        line.prefix.length + line.content.length, comment.loc.end.column - line.close.length);
+    } else if (index === comment.loc.start.line) {
+      line.open = '/*';
+      line.close = '';
+      const prefixHaystack = line.text.slice(line.lead_whitespace.length + line.open.length);
       const prefixMatch = /^\*+\s*/.exec(prefixHaystack);
-      output.prefix = prefixMatch ? prefixMatch[0] : '';
-      output.content = output.text.slice(output.lead_whitespace.length + output.open.length +
-        output.prefix.length).trimEnd();
-      output.suffix = output.text.slice(output.lead_whitespace.length + output.open.length +
-        output.prefix.length + output.content.length);
-    } else if (line === comment.loc.end.line) {
-      output.open = '';
-      output.close = '*/';
-      const prefixHaystack = output.text.slice(output.lead_whitespace.length,
-        comment.loc.end.column - output.close.length);
+      line.prefix = prefixMatch ? prefixMatch[0] : '';
+      line.content = line.text.slice(line.lead_whitespace.length + line.open.length +
+        line.prefix.length).trimEnd();
+      line.suffix = line.text.slice(line.lead_whitespace.length + line.open.length +
+        line.prefix.length + line.content.length);
+    } else if (index === comment.loc.end.line) {
+      line.open = '';
+      line.close = '*/';
+      const prefixHaystack = line.text.slice(line.lead_whitespace.length,
+        comment.loc.end.column - line.close.length);
       const prefixMatch = /^\*\s+/.exec(prefixHaystack);
-      output.prefix = prefixMatch ? prefixMatch[0] : '';
-      output.content = output.text.slice(output.lead_whitespace.length + output.open.length +
-        output.prefix.length, comment.loc.end.column - output.close.length).trimEnd();
-      output.suffix = output.text.slice(output.lead_whitespace.length + output.open.length +
-        output.prefix.length + output.content.length, comment.loc.end.column - output.close.length);
+      line.prefix = prefixMatch ? prefixMatch[0] : '';
+      line.content = line.text.slice(line.lead_whitespace.length + line.open.length +
+        line.prefix.length, comment.loc.end.column - line.close.length).trimEnd();
+      line.suffix = line.text.slice(line.lead_whitespace.length + line.open.length +
+        line.prefix.length + line.content.length, comment.loc.end.column - line.close.length);
     } else {
-      output.open = '';
-      output.close = '';
+      line.open = '';
+      line.close = '';
       const prefixMatch = /^\*\s+/.exec(textTrimmedStart);
-      output.prefix = prefixMatch ? prefixMatch[0] : '';
-      output.content = output.text.slice(output.lead_whitespace.length + output.open.length +
-        output.prefix.length).trimEnd();
-      output.suffix = output.text.slice(output.lead_whitespace.length + output.open.length +
-        output.prefix.length + output.content.length);
+      line.prefix = prefixMatch ? prefixMatch[0] : '';
+      line.content = line.text.slice(line.lead_whitespace.length + line.open.length +
+        line.prefix.length).trimEnd();
+      line.suffix = line.text.slice(line.lead_whitespace.length + line.open.length +
+        line.prefix.length + line.content.length);
     }
   } else {
     // eslint for some reason if forgetting about its own shebang type in the AST
@@ -214,14 +215,14 @@ export function parseLine(code: eslint.SourceCode, comment: estree.Comment, line
     throw new TypeError(`Unexpected comment type "${<string>comment.type}"`);
   }
 
-  const [markup, markupSpace] = parseMarkup(comment, output.prefix, output.content);
-  output.markup = markup;
-  output.markup_space = markupSpace;
+  const [markup, markupSpace] = parseMarkup(comment, line.prefix, line.content);
+  line.markup = markup;
+  line.markup_space = markupSpace;
 
-  output.directive = parseDirective(output);
-  output.fixme = parseFixme(output.content);
+  line.directive = parseDirective(line);
+  line.fixme = parseFixme(line.content);
 
-  return output;
+  return line;
 }
 
 /**
