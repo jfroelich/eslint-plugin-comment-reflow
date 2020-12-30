@@ -28,11 +28,21 @@ export function split(previous: CommentLine, current?: CommentLine) {
     return;
   }
 
-  if (previous.index < previous.comment.loc.end.line && endIndexOf(previous, 'content') <= threshold) {
+  if (previous.index < previous.comment.loc.end.line &&
+    endIndexOf(previous, 'content') <= threshold) {
     return;
   }
 
-  if (previous.index === previous.comment.loc.end.line && endIndexOf(previous, 'close') <= threshold) {
+  if (previous.index === previous.comment.loc.end.line &&
+    endIndexOf(previous, 'close') <= threshold) {
+    return;
+  }
+
+  // edge case for content under the limit but trailing whitespace over the limit
+
+  if (previous.comment.type === 'Line' &&
+    endIndexOf(previous, 'content') <= threshold &&
+    endIndexOf(previous, 'suffix') > threshold) {
     return;
   }
 
