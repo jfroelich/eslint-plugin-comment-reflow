@@ -218,7 +218,7 @@ export function parseLine(code: eslint.SourceCode, comment: estree.Comment, line
   output.markup = markup;
   output.markup_space = markupSpace;
 
-  output.directive = parseDirective(comment, output.prefix, output.content, line);
+  output.directive = parseDirective(output);
   output.fixme = parseFixme(output.content);
 
   return output;
@@ -263,89 +263,90 @@ function parseMarkup(comment: estree.Comment, prefix: string, content: string) {
   return ['', ''];
 }
 
-function parseDirective(comment: estree.Comment, prefix: string, content: string, line: number) {
-  if (content.length === 0) {
+function parseDirective(line: CommentLine) {
+  if (line.content.length === 0) {
     return '';
   }
 
-  if (line === comment.loc.start.line && !prefix.startsWith('*') && content.startsWith('tslint:')) {
+  if (line.index === line.comment.loc.start.line && !line.prefix.startsWith('*') &&
+    line.content.startsWith('tslint:')) {
     return 'tslint';
   }
 
-  if (line === comment.loc.start.line && content.startsWith('global ')) {
+  if (line.index === line.comment.loc.start.line && line.content.startsWith('global ')) {
     return 'global';
   }
 
-  if (line === comment.loc.start.line && content.startsWith('globals ')) {
+  if (line.index === line.comment.loc.start.line && line.content.startsWith('globals ')) {
     return 'globals';
   }
 
-  if (line === comment.loc.start.line && content.startsWith('jslint ')) {
+  if (line.index === line.comment.loc.start.line && line.content.startsWith('jslint ')) {
     return 'jslint';
   }
 
-  if (line === comment.loc.start.line && content.startsWith('property ')) {
+  if (line.index === line.comment.loc.start.line && line.content.startsWith('property ')) {
     return 'property';
   }
 
-  if (line === comment.loc.start.line && content.startsWith('eslint ')) {
+  if (line.index === line.comment.loc.start.line && line.content.startsWith('eslint ')) {
     return 'eslint';
   }
 
-  if (content.startsWith('jshint ')) {
+  if (line.content.startsWith('jshint ')) {
     return 'jshint';
   }
 
-  if (content.startsWith('istanbul ')) {
+  if (line.content.startsWith('istanbul ')) {
     return 'istanbul';
   }
 
-  if (content.startsWith('jscs ')) {
+  if (line.content.startsWith('jscs ')) {
     return 'jscs';
   }
 
-  if (content.startsWith('eslint-env')) {
+  if (line.content.startsWith('eslint-env')) {
     return 'eslint-env';
   }
 
-  if (content.startsWith('eslint-disable')) {
+  if (line.content.startsWith('eslint-disable')) {
     return 'eslint-disable';
   }
 
-  if (content.startsWith('eslint-enable')) {
+  if (line.content.startsWith('eslint-enable')) {
     return 'eslint-enable';
   }
 
-  if (content.startsWith('eslint-disable-next-line')) {
+  if (line.content.startsWith('eslint-disable-next-line')) {
     return 'eslint-disable-next-line';
   }
 
-  if (content.startsWith('eslint-disable-line')) {
+  if (line.content.startsWith('eslint-disable-line')) {
     return 'eslint-disable-line';
   }
 
-  if (content.startsWith('exported')) {
+  if (line.content.startsWith('exported')) {
     return 'exported';
   }
 
-  if (content.startsWith('@ts-check')) {
+  if (line.content.startsWith('@ts-check')) {
     return '@ts-check';
   }
 
-  if (content.startsWith('@ts-nocheck')) {
+  if (line.content.startsWith('@ts-nocheck')) {
     return '@ts-nocheck';
   }
 
-  if (content.startsWith('@ts-ignore')) {
+  if (line.content.startsWith('@ts-ignore')) {
     return '@ts-ignore';
   }
 
-  if (content.startsWith('@ts-expect-error')) {
+  if (line.content.startsWith('@ts-expect-error')) {
     return '@ts-expect-error';
   }
 
-  if (comment.type === 'Line' && /^\/\s*<(reference|amd)/.test(content)) {
-    return content.slice(1).trimLeft();
+  if (line.comment.type === 'Line' && /^\/\s*<(reference|amd)/.test(line.content)) {
+    return line.content.slice(1).trimLeft();
   }
 
   return '';
