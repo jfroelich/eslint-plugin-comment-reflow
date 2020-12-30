@@ -67,13 +67,13 @@ function analyzeProgram(ruleContext: eslint.Rule.RuleContext, node: estree.Node)
         if (previousLine) {
           const report = split(previousLine, currentLine);
           if (report) {
-            return ruleContext.report(report);
+            ruleContext.report(report);
           }
         }
 
         const report = merge(previousLine, currentLine);
         if (report) {
-          return ruleContext.report(report);
+          ruleContext.report(report);
         }
 
         previousLine = currentLine;
@@ -83,7 +83,7 @@ function analyzeProgram(ruleContext: eslint.Rule.RuleContext, node: estree.Node)
       if (lineCounter % 2 == 1) {
         const report = split(previousLine);
         if (report) {
-          return ruleContext.report(report);
+          ruleContext.report(report);
         }
       }
 
@@ -94,13 +94,13 @@ function analyzeProgram(ruleContext: eslint.Rule.RuleContext, node: estree.Node)
       if (previousLine)  {
         const report = split(previousLine, currentLine);
         if (report) {
-          return ruleContext.report(report);
+          ruleContext.report(report);
         }
       }
 
       const report = merge(previousLine, currentLine);
       if (report) {
-        return ruleContext.report(report);
+        ruleContext.report(report);
       }
 
       previousLine = currentLine;
@@ -115,7 +115,7 @@ function analyzeProgram(ruleContext: eslint.Rule.RuleContext, node: estree.Node)
   if (finalLineCommentLine) {
     const report = split(finalLineCommentLine);
     if (report) {
-      return ruleContext.report(report);
+      ruleContext.report(report);
     }
   }
 }
