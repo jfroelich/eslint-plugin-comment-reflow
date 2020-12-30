@@ -33,7 +33,7 @@ export function split(context: CommentContext, comment: estree.Comment, line: Co
     return;
   }
 
-  if (line.directive.length > 0) {
+  if (line.directive) {
     return;
   }
 
