@@ -1,9 +1,7 @@
 import eslint from 'eslint';
-import estree from 'estree';
 import { CommentContext, CommentLine, endIndexOf, tokenize } from './util';
 
-export function merge(context: CommentContext, type: estree.Comment['type'], previous: CommentLine,
-  current: CommentLine) {
+export function merge(context: CommentContext, previous: CommentLine, current: CommentLine) {
   if (context.in_md_fence || context.in_jsdoc_example) {
     return;
   }
@@ -25,12 +23,12 @@ export function merge(context: CommentContext, type: estree.Comment['type'], pre
     return;
   }
 
-  if (type === 'Block' && (current.markup.startsWith('*') || current.markup.startsWith('-') ||
-    /^\d/.test(current.markup))) {
+  if (current.comment.type === 'Block' && (current.markup.startsWith('*') ||
+    current.markup.startsWith('-') || /^\d/.test(current.markup))) {
     return;
   }
 
-  if (type === 'Block' && current.markup.startsWith('@')) {
+  if (current.comment.type === 'Block' && current.markup.startsWith('@')) {
     return;
   }
 
@@ -86,7 +84,7 @@ export function merge(context: CommentContext, type: estree.Comment['type'], pre
   // the start of the next comment into the replacement text.
 
   if (tokenText.length < current.content.length) {
-    const open = type === 'Block' ? '' : '//';
+    const open = current.comment.type === 'Block' ? '' : '//';
     replacementText += '\n' + current.lead_whitespace + open + current.prefix;
   }
 
