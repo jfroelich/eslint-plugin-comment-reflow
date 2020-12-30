@@ -25,23 +25,25 @@ function createCommentLengthRule(context: eslint.Rule.RuleContext) {
   };
 }
 
-function analyzeProgram(context: eslint.Rule.RuleContext, node: estree.Node) {
+function analyzeProgram(ruleContext: eslint.Rule.RuleContext, node: estree.Node) {
   let maxLineLength = 80;
-  if (context.options && context.options.length) {
-    maxLineLength = <number>context.options[0];
+  if (ruleContext.options && ruleContext.options.length) {
+    maxLineLength = <number>ruleContext.options[0];
   }
 
   assert(Number.isInteger(maxLineLength), 'Invalid option for maximum line length');
 
-  const code = context.getSourceCode();
+  const code = ruleContext.getSourceCode();
   const comments = code.getAllComments();
   let previousLine: CommentLine;
 
   for (const comment of comments) {
-    const commentContext: CommentContext = {
+    const context: CommentContext = {
       node,
       code,
-      max_line_length: maxLineLength
+      max_line_length: maxLineLength,
+      in_md_fence: false,
+      in_jsdoc_example: false
     };
 
     const previousToken = code.getTokenBefore(comment, { includeComments: true });
@@ -55,44 +57,39 @@ function analyzeProgram(context: eslint.Rule.RuleContext, node: estree.Node) {
     }
 
     if (comment.type === 'Block') {
-      // reset previous line
       previousLine = null;
-      commentContext.in_md_fence = false;
-      commentContext.in_jsdoc_example = false;
-      const loc = comment.loc;
 
-      for (let line = loc.start.line; line <= loc.end.line; line++) {
-        const currentLine = parseLine(commentContext.code, comment, line);
+      for (let line = comment.loc.start.line; line <= comment.loc.end.line; line++) {
+        const currentLine = parseLine(context, comment, line);
 
-        let report = split(commentContext, currentLine);
+        let report = split(context, currentLine);
         if (report) {
-          return context.report(report);
+          return ruleContext.report(report);
         }
 
         if (previousLine) {
-          report = merge(commentContext, previousLine, currentLine);
+          report = merge(context, previousLine, currentLine);
           if (report) {
-            return context.report(report);
+            return ruleContext.report(report);
           }
         }
 
         previousLine = currentLine;
       }
 
-      // reset previous line so next line/block comment does not see it.
       previousLine = null;
      } else if (comment.type === 'Line') {
-      const currentLine = parseLine(code, comment, comment.loc.start.line);
+      const currentLine = parseLine(context, comment, comment.loc.start.line);
 
-      let report = split(commentContext, currentLine);
+      let report = split(context, currentLine);
       if (report) {
-        return context.report(report);
+        return ruleContext.report(report);
       }
 
       if (previousLine) {
-        report = merge(commentContext, previousLine, currentLine);
+        report = merge(context, previousLine, currentLine);
         if (report) {
-          return context.report(report);
+          return ruleContext.report(report);
         }
       }
 

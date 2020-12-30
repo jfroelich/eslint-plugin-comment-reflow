@@ -11,7 +11,13 @@ export interface CommentContext {
 
 export interface CommentLine {
   /**
-   * Reference to comment that contains this line
+   * Reference to the context of the comment that contains the line. This is not accessed via
+   * comment.context because we refrain from injecting custom properties into external objects.
+   */
+  context: CommentContext;
+
+  /**
+   * Reference to comment that contains the line.
    */
   comment: estree.Comment;
 
@@ -141,11 +147,12 @@ export function endIndexOf(line: CommentLine, region: Region) {
   }
 }
 
-export function parseLine(code: eslint.SourceCode, comment: estree.Comment, index: number) {
+export function parseLine(context: CommentContext, comment: estree.Comment, lineIndex: number) {
   const line = <CommentLine>{};
+  line.context = context;
   line.comment = comment;
-  line.index = index;
-  line.text = code.lines[index - 1];
+  line.index = lineIndex;
+  line.text = context.code.lines[lineIndex - 1];
 
   const textTrimmedStart = line.text.trimStart();
   line.lead_whitespace = line.text.slice(0, line.text.length - textTrimmedStart.length);
@@ -167,7 +174,7 @@ export function parseLine(code: eslint.SourceCode, comment: estree.Comment, inde
     line.suffix = line.text.slice(line.lead_whitespace.length + line.open.length +
       line.prefix.length + line.content.length);
   } else if (comment.type === 'Block') {
-    if (index === comment.loc.start.line && index === comment.loc.end.line) {
+    if (lineIndex === comment.loc.start.line && lineIndex === comment.loc.end.line) {
       line.open = '/*';
       line.close = '*/';
       const prefixHaystack = line.text.slice(line.lead_whitespace.length + line.open.length,
@@ -178,7 +185,7 @@ export function parseLine(code: eslint.SourceCode, comment: estree.Comment, inde
         line.prefix.length, comment.loc.end.column - line.close.length).trimEnd();
       line.suffix = line.text.slice(line.lead_whitespace.length + line.open.length +
         line.prefix.length + line.content.length, comment.loc.end.column - line.close.length);
-    } else if (index === comment.loc.start.line) {
+    } else if (lineIndex === comment.loc.start.line) {
       line.open = '/*';
       line.close = '';
       const prefixHaystack = line.text.slice(line.lead_whitespace.length + line.open.length);
@@ -188,7 +195,7 @@ export function parseLine(code: eslint.SourceCode, comment: estree.Comment, inde
         line.prefix.length).trimEnd();
       line.suffix = line.text.slice(line.lead_whitespace.length + line.open.length +
         line.prefix.length + line.content.length);
-    } else if (index === comment.loc.end.line) {
+    } else if (lineIndex === comment.loc.end.line) {
       line.open = '';
       line.close = '*/';
       const prefixHaystack = line.text.slice(line.lead_whitespace.length,
@@ -230,6 +237,7 @@ export function parseLine(code: eslint.SourceCode, comment: estree.Comment, inde
  * and the second is trailing whitespace if any. This focuses on markdown but it can also match
  * jsdoc.
  *
+ * @todo use line parameter instead of 3 params
  * @todo consider creating a jsdoc prop and a markdown prop and not mixing the two.
  */
 function parseMarkup(comment: estree.Comment, prefix: string, content: string) {
@@ -248,7 +256,7 @@ function parseMarkup(comment: estree.Comment, prefix: string, content: string) {
   }
 
   // TODO: markdown horizontal rules
-  // TODO: indented lists
+  // TODO: indented lists (we might already support this because whitespace in prefix)
 
   const matches = /^([*-]|\d+\.|@[a-zA-Z]+|#{1,6})(\s+)/.exec(content);
   if (matches && matches.length === 3) {
