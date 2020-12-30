@@ -1,12 +1,12 @@
 import eslint from 'eslint';
-import { CommentContext, CommentLine, endIndexOf } from './util';
+import { CommentLine, endIndexOf } from './util';
 
-export function split(context: CommentContext, line: CommentLine) {
-  if (!updatePreformattedState(context, line)) {
+export function split(line: CommentLine) {
+  if (!updatePreformattedState(line)) {
     return;
   }
 
-  const threshold = context.max_line_length;
+  const threshold = line.context.max_line_length;
 
   if (line.text.length <= threshold) {
     return;
@@ -41,7 +41,7 @@ export function split(context: CommentContext, line: CommentLine) {
     return;
   }
 
-  const contentBreakPosition = findContentBreak(line, threshold);
+  const contentBreakPosition = findContentBreak(line);
 
   let lineBreakPosition = -1;
   if (contentBreakPosition > 0) {
@@ -54,7 +54,7 @@ export function split(context: CommentContext, line: CommentLine) {
     lineBreakPosition = threshold;
   }
 
-  const lineStartIndex = context.code.getIndexFromLoc({ line: line.index, column: 0 });
+  const lineStartIndex = line.context.code.getIndexFromLoc({ line: line.index, column: 0 });
   const insertAfterRange: eslint.AST.Range = [0, lineStartIndex + lineBreakPosition];
 
   let textToInsert = '\n';
@@ -92,7 +92,7 @@ export function split(context: CommentContext, line: CommentLine) {
   }
 
   return <eslint.Rule.ReportDescriptor>{
-    node: context.node,
+    node: line.context.node,
     loc: {
       start: {
         line: line.index,
@@ -106,7 +106,7 @@ export function split(context: CommentContext, line: CommentLine) {
     messageId: 'split',
     data: {
       line_length: `${line.text.length}`,
-      max_length: `${context.max_line_length}`
+      max_length: `${line.context.max_line_length}`
     },
     fix: function (fixer) {
       return fixer.insertTextAfterRange(insertAfterRange, textToInsert);
@@ -115,31 +115,32 @@ export function split(context: CommentContext, line: CommentLine) {
 }
 
 /**
- * Detects transitions into and out of a preformatted state in a block comment. Returns whether the
- * text should still be considered for overflow.
+ * Detects transitions into and out of a preformatted state in a block comment. This mutates the
+ * context associated with the given line. Returns whether the text should still be considered for
+ * overflow.
  */
-function updatePreformattedState(context: CommentContext, line: CommentLine) {
+function updatePreformattedState(line: CommentLine) {
   if (line.comment.type !== 'Block') {
     return true;
   }
 
-  if (context.in_md_fence) {
+  if (line.context.in_md_fence) {
     if (line.index > line.comment.loc.start.line && line.content.startsWith('```')) {
       // Exiting markdown fence section. Do not consider overflow.
-      context.in_md_fence = false;
+      line.context.in_md_fence = false;
       return false;
     } else {
       // Remaining in markdown fence section. Do not consider overflow.
       return false;
     }
-  } else if (context.in_jsdoc_example) {
+  } else if (line.context.in_jsdoc_example) {
     if (line.content.startsWith('@')) {
       if (line.content.startsWith('@example')) {
         // Remaining in jsdoc example section. Do not consider overflow.
         return false;
       } else {
         // Exiting jsdoc example section. Consider overflow. Fall through.
-        context.in_jsdoc_example = false;
+        line.context.in_jsdoc_example = false;
       }
     } else {
       // Remaining in jsdoc example section. Do not consider overflow.
@@ -147,11 +148,11 @@ function updatePreformattedState(context: CommentContext, line: CommentLine) {
     }
   } else if (line.index > line.comment.loc.start.line && line.content.startsWith('```')) {
     // Entering markdown fence section. Do not consider overflow.
-    context.in_md_fence = true;
+    line.context.in_md_fence = true;
     return false;
   } else if (line.index > line.comment.loc.start.line && line.content.startsWith('@example')) {
     // Entering jsdoc example section. Do not consider overflow.
-    context.in_jsdoc_example = true;
+    line.context.in_jsdoc_example = true;
     return false;
   }
 
@@ -163,7 +164,9 @@ function updatePreformattedState(context: CommentContext, line: CommentLine) {
  * Return the position where to break the text or -1. This only searches in a subregion of the text
  * so as to not match whitespace in other places.
  */
-export function findContentBreak(line: CommentLine, threshold: number) {
+export function findContentBreak(line: CommentLine) {
+  const threshold = line.context.max_line_length;
+
   if (endIndexOf(line, 'suffix') <= threshold) {
     return -1;
   }
