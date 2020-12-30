@@ -62,13 +62,13 @@ function analyzeProgram(context: eslint.Rule.RuleContext, node: estree.Node) {
       for (let line = loc.start.line, previousLine: CommentLine; line <= loc.end.line; line++) {
         const currentLine = parseLine(commentContext.code, comment, line);
 
-        let report = split(commentContext, comment, currentLine);
+        let report = split(commentContext, currentLine);
         if (report) {
           return context.report(report);
         }
 
         if (previousLine) {
-          report = merge(commentContext, comment.type, previousLine, currentLine);
+          report = merge(commentContext, previousLine, currentLine);
           if (report) {
             return context.report(report);
           }
@@ -79,13 +79,13 @@ function analyzeProgram(context: eslint.Rule.RuleContext, node: estree.Node) {
      } else if (comment.type === 'Line') {
       const currentLine = parseLine(code, comment, comment.loc.start.line);
 
-      let report = split(commentContext, comment, currentLine);
+      let report = split(commentContext, currentLine);
       if (report) {
         return context.report(report);
       }
 
       if (previousSingleLine) {
-        report = merge(commentContext, comment.type, previousSingleLine, currentLine);
+        report = merge(commentContext, previousSingleLine, currentLine);
         if (report) {
           return context.report(report);
         }
