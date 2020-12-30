@@ -11,6 +11,11 @@ export interface CommentContext {
 
 export interface CommentLine {
   /**
+   * Reference to comment that contains this line
+   */
+  comment: estree.Comment;
+
+  /**
    * The ESLint line index, which is 1-based. This should not be confused with some kind of index
    * into an array of lines for a comment. This is the global index for the entire file.
    */
@@ -138,6 +143,7 @@ export function endIndexOf(line: CommentLine, region: Region) {
 
 export function parseLine(code: eslint.SourceCode, comment: estree.Comment, line: number) {
   const output = <CommentLine>{};
+  output.comment = comment;
   output.index = line;
   output.text = code.lines[line - 1];
 
