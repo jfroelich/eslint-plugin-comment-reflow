@@ -1,5 +1,5 @@
 import eslint from 'eslint';
-import { CommentLine, endIndexOf } from './util';
+import { CommentLine, endIndexOf, tokenize } from './util';
 
 export function split(previous: CommentLine, current?: CommentLine) {
   if (current && (previous.index + 1 !== current.index)) {
@@ -55,57 +55,56 @@ export function split(previous: CommentLine, current?: CommentLine) {
     return;
   }
 
-  const contentBreakPosition = findContentBreak(previous);
-
-  let lineBreakPosition = -1;
-  if (contentBreakPosition > 0) {
-    lineBreakPosition = contentBreakPosition;
-  } else if (previous.comment.type === 'Block' && previous.index === previous.comment.loc.end.line &&
-    previous.comment.loc.end.column - 1 === threshold) {
-    // Avoid breaking right in the middle of the close
-    lineBreakPosition = threshold - 1;
-  } else {
-    lineBreakPosition = threshold;
+  const tokens = tokenize(previous.content);
+  let excessRemaining = endIndexOf(previous, 'close') - threshold;
+  let tokenSplitIndex = -1;
+  for (let i = tokens.length - 1; i > -1; i--) {
+    const token = tokens[i];
+    if (token.length <= excessRemaining) {
+      tokenSplitIndex = i;
+      excessRemaining -= token.length;
+    } else {
+      break;
+    }
   }
 
-  const lineStartIndex = previous.context.code.getIndexFromLoc({ line: previous.index, column: 0 });
-  const insertAfterRange: eslint.AST.Range = [0, lineStartIndex + lineBreakPosition];
+  // TODO: if tokenSplitIndex is -1, we still split, we just do a hard split where we replace the
+  // last token with itself plus a line break.
 
-  let textToInsert = '\n';
-
-  if (previous.index === previous.comment.loc.start.line && previous.index === previous.comment.loc.end.line) {
-    textToInsert += previous.text.slice(0, previous.lead_whitespace.length);
-
-    // avoid appending /* to the new line
-    if (previous.comment.type === 'Line') {
-      textToInsert += previous.open;
-    }
-
-    // For a one line block comment that looks like javadoc when wrapping the first line, introduce
-    // a new space.
-
-    if (previous.comment.type === 'Block' && previous.prefix.startsWith('*')) {
-      textToInsert += ' ';
-    }
-
-    textToInsert += previous.prefix + ''.padEnd(previous.markup.length + previous.markup_space.length);
-  } else if (previous.index === previous.comment.loc.start.line) {
-    textToInsert += previous.text.slice(0, previous.lead_whitespace.length);
-    if (previous.prefix.startsWith('*')) {
-      // NOTE: unsure about this space
-      textToInsert += ' ' + previous.prefix + ''.padEnd(previous.markup.length + previous.markup_space.length);
-    }
-  } else if (previous.index === previous.comment.loc.end.line) {
-    textToInsert += previous.text.slice(0, previous.lead_whitespace.length);
-    if (previous.prefix.startsWith('*')) {
-      textToInsert += previous.prefix + ''.padEnd(previous.markup.length + previous.markup_space.length);
-    }
-  } else {
-    textToInsert += previous.text.slice(0, previous.lead_whitespace.length + previous.prefix.length);
-    textToInsert += ''.padEnd(previous.markup.length +  previous.markup_space.length, ' ');
+  if (tokenSplitIndex === -1) {
+    return;
   }
 
-  return <eslint.Rule.ReportDescriptor>{
+  const excessTokens = tokens.slice(tokenSplitIndex);
+
+  console.log('tokens to move:', excessTokens);
+
+  // TODO: see earlier todo, we still want to force the split.
+
+  if (excessTokens.length === 0) {
+    return;
+  }
+
+  const tokenText = excessTokens.join('');
+
+  // TODO: see the commented out code, we cannot simply include previous.open, it could be /*
+
+  const replacementText = '\n' + previous.lead_whitespace + previous.open + previous.prefix +
+    tokenText.trim();
+
+  console.log('replacement text:', replacementText.replace(/\n/, '\\n'));
+
+  const rangeStart = previous.context.code.getIndexFromLoc({
+    line: previous.index,
+    column: threshold
+  });
+
+  const rangeEnd = previous.context.code.getIndexFromLoc({
+    line: current ? current.index : previous.index,
+    column: current ? (endIndexOf(current, 'prefix') + tokenText.length) : previous.text.length
+  });
+
+  const report: eslint.Rule.ReportDescriptor = {
     node: previous.context.node,
     loc: {
       start: {
@@ -113,8 +112,8 @@ export function split(previous: CommentLine, current?: CommentLine) {
         column: 0
       },
       end: {
-        line: previous.index,
-        column: previous.text.length
+        line: current ? current.index : previous.index,
+        column: current ? current.text.length : previous.text.length
       }
     },
     messageId: 'split',
@@ -123,9 +122,83 @@ export function split(previous: CommentLine, current?: CommentLine) {
       max_length: `${previous.context.max_line_length}`
     },
     fix: function (fixer) {
-      return fixer.insertTextAfterRange(insertAfterRange, textToInsert);
+      return fixer.replaceTextRange([rangeStart, rangeEnd], replacementText);
     }
   };
+
+  return report;
+
+  // const contentBreakPosition = findContentBreak(previous);
+
+  // let lineBreakPosition = -1;
+  // if (contentBreakPosition > 0) {
+  //   lineBreakPosition = contentBreakPosition;
+  // } else if (previous.comment.type === 'Block' && previous.index === previous.comment.loc.end.line &&
+  //   previous.comment.loc.end.column - 1 === threshold) {
+  //   // Avoid breaking right in the middle of the close
+  //   lineBreakPosition = threshold - 1;
+  // } else {
+  //   lineBreakPosition = threshold;
+  // }
+
+  // const lineStartIndex = previous.context.code.getIndexFromLoc({ line: previous.index, column: 0 });
+  // const insertAfterRange: eslint.AST.Range = [0, lineStartIndex + lineBreakPosition];
+
+  // let textToInsert = '\n';
+
+  // if (previous.index === previous.comment.loc.start.line && previous.index === previous.comment.loc.end.line) {
+  //   textToInsert += previous.text.slice(0, previous.lead_whitespace.length);
+
+  //   // avoid appending /* to the new line
+  //   if (previous.comment.type === 'Line') {
+  //     textToInsert += previous.open;
+  //   }
+
+  //   // For a one line block comment that looks like javadoc when wrapping the first line, introduce
+  //   // a new space.
+
+  //   if (previous.comment.type === 'Block' && previous.prefix.startsWith('*')) {
+  //     textToInsert += ' ';
+  //   }
+
+  //   textToInsert += previous.prefix + ''.padEnd(previous.markup.length + previous.markup_space.length);
+  // } else if (previous.index === previous.comment.loc.start.line) {
+  //   textToInsert += previous.text.slice(0, previous.lead_whitespace.length);
+  //   if (previous.prefix.startsWith('*')) {
+  //     // NOTE: unsure about this space
+  //     textToInsert += ' ' + previous.prefix + ''.padEnd(previous.markup.length + previous.markup_space.length);
+  //   }
+  // } else if (previous.index === previous.comment.loc.end.line) {
+  //   textToInsert += previous.text.slice(0, previous.lead_whitespace.length);
+  //   if (previous.prefix.startsWith('*')) {
+  //     textToInsert += previous.prefix + ''.padEnd(previous.markup.length + previous.markup_space.length);
+  //   }
+  // } else {
+  //   textToInsert += previous.text.slice(0, previous.lead_whitespace.length + previous.prefix.length);
+  //   textToInsert += ''.padEnd(previous.markup.length +  previous.markup_space.length, ' ');
+  // }
+
+  // return <eslint.Rule.ReportDescriptor>{
+  //   node: previous.context.node,
+  //   loc: {
+  //     start: {
+  //       line: previous.index,
+  //       column: 0
+  //     },
+  //     end: {
+  //       line: previous.index,
+  //       column: previous.text.length
+  //     }
+  //   },
+  //   messageId: 'split',
+  //   data: {
+  //     line_length: `${previous.text.length}`,
+  //     max_length: `${previous.context.max_line_length}`
+  //   },
+  //   fix: function (fixer) {
+  //     return fixer.insertTextAfterRange(insertAfterRange, textToInsert);
+  //   }
+  // };
 }
 
 /**
