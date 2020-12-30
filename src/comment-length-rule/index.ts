@@ -36,6 +36,7 @@ function analyzeProgram(ruleContext: eslint.Rule.RuleContext, node: estree.Node)
   const code = ruleContext.getSourceCode();
   const comments = code.getAllComments();
   let previousLine: CommentLine;
+  let finalLineCommentLine: CommentLine;
 
   for (const comment of comments) {
     const context: CommentContext = {
@@ -59,37 +60,62 @@ function analyzeProgram(ruleContext: eslint.Rule.RuleContext, node: estree.Node)
     if (comment.type === 'Block') {
       previousLine = null;
 
+      let lineCounter = 0;
       for (let line = comment.loc.start.line; line <= comment.loc.end.line; line++) {
         const currentLine = parseLine(context, comment, line);
 
-        let report = split(currentLine);
-        if (report) {
-          return ruleContext.report(report);
+        if (previousLine) {
+          const report = split(previousLine, currentLine);
+          if (report) {
+            return ruleContext.report(report);
+          }
         }
 
-        report = merge(previousLine, currentLine);
+        const report = merge(previousLine, currentLine);
         if (report) {
           return ruleContext.report(report);
         }
 
         previousLine = currentLine;
+        lineCounter++;
+      }
+
+      if (lineCounter % 2 == 1) {
+        const report = split(previousLine);
+        if (report) {
+          return ruleContext.report(report);
+        }
       }
 
       previousLine = null;
-     } else if (comment.type === 'Line') {
+    } else if (comment.type === 'Line') {
       const currentLine = parseLine(context, comment, comment.loc.start.line);
 
-      let report = split(currentLine);
-      if (report) {
-        return ruleContext.report(report);
+      if (previousLine)  {
+        const report = split(previousLine, currentLine);
+        if (report) {
+          return ruleContext.report(report);
+        }
       }
 
-      report = merge(previousLine, currentLine);
+      const report = merge(previousLine, currentLine);
       if (report) {
         return ruleContext.report(report);
       }
 
       previousLine = currentLine;
+      finalLineCommentLine = currentLine;
+    }
+  }
+
+  // TODO: analyze at the time of visit, not at the very end. it is weird to see a bug in a long
+  // line comment but not see a linting error and instead see only a linting error in some later
+  // block comment.
+
+  if (finalLineCommentLine) {
+    const report = split(finalLineCommentLine);
+    if (report) {
+      return ruleContext.report(report);
     }
   }
 }
