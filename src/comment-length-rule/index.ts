@@ -35,7 +35,7 @@ function analyzeProgram(context: eslint.Rule.RuleContext, node: estree.Node) {
 
   const code = context.getSourceCode();
   const comments = code.getAllComments();
-  let previousSingleLine: CommentLine;
+  let previousLine: CommentLine;
 
   for (const comment of comments) {
     const commentContext: CommentContext = {
@@ -55,11 +55,13 @@ function analyzeProgram(context: eslint.Rule.RuleContext, node: estree.Node) {
     }
 
     if (comment.type === 'Block') {
+      // reset previous line
+      previousLine = null;
       commentContext.in_md_fence = false;
       commentContext.in_jsdoc_example = false;
       const loc = comment.loc;
 
-      for (let line = loc.start.line, previousLine: CommentLine; line <= loc.end.line; line++) {
+      for (let line = loc.start.line; line <= loc.end.line; line++) {
         const currentLine = parseLine(commentContext.code, comment, line);
 
         let report = split(commentContext, currentLine);
@@ -76,6 +78,9 @@ function analyzeProgram(context: eslint.Rule.RuleContext, node: estree.Node) {
 
         previousLine = currentLine;
       }
+
+      // reset previous line so next line/block comment does not see it.
+      previousLine = null;
      } else if (comment.type === 'Line') {
       const currentLine = parseLine(code, comment, comment.loc.start.line);
 
@@ -84,14 +89,14 @@ function analyzeProgram(context: eslint.Rule.RuleContext, node: estree.Node) {
         return context.report(report);
       }
 
-      if (previousSingleLine) {
-        report = merge(commentContext, previousSingleLine, currentLine);
+      if (previousLine) {
+        report = merge(commentContext, previousLine, currentLine);
         if (report) {
           return context.report(report);
         }
       }
 
-      previousSingleLine = currentLine;
+      previousLine = currentLine;
     }
   }
 }
