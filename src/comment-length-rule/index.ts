@@ -68,7 +68,7 @@ function analyzeProgram(ruleContext: eslint.Rule.RuleContext, node: estree.Node)
         }
 
         if (previousLine) {
-          report = merge(context, previousLine, currentLine);
+          report = merge(previousLine, currentLine);
           if (report) {
             return ruleContext.report(report);
           }
@@ -87,7 +87,7 @@ function analyzeProgram(ruleContext: eslint.Rule.RuleContext, node: estree.Node)
       }
 
       if (previousLine) {
-        report = merge(context, previousLine, currentLine);
+        report = merge(previousLine, currentLine);
         if (report) {
           return ruleContext.report(report);
         }

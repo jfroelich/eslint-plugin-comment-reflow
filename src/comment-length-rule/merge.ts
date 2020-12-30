@@ -1,8 +1,8 @@
 import eslint from 'eslint';
-import { CommentContext, CommentLine, endIndexOf, tokenize } from './util';
+import { CommentLine, endIndexOf, tokenize } from './util';
 
-export function merge(context: CommentContext, previous: CommentLine, current: CommentLine) {
-  if (context.in_md_fence || context.in_jsdoc_example) {
+export function merge(previous: CommentLine, current: CommentLine) {
+  if (previous.context.in_md_fence || previous.context.in_jsdoc_example) {
     return;
   }
 
@@ -19,7 +19,7 @@ export function merge(context: CommentContext, previous: CommentLine, current: C
   }
 
   const previousLineEndPosition = endIndexOf(previous, 'suffix');
-  if (previousLineEndPosition >= context.max_line_length) {
+  if (previousLineEndPosition >= previous.context.max_line_length) {
     return;
   }
 
@@ -37,7 +37,7 @@ export function merge(context: CommentContext, previous: CommentLine, current: C
   const isHyphenMerge = (tokens[0] === '-' && !previous.content.endsWith('-')) ||
     (tokens[0] !== '-' && previous.content.endsWith('-'));
 
-  let spaceRemaining = context.max_line_length - previousLineEndPosition;
+  let spaceRemaining = previous.context.max_line_length - previousLineEndPosition;
 
   if (!isHyphenMerge) {
     spaceRemaining--;
@@ -106,18 +106,18 @@ export function merge(context: CommentContext, previous: CommentLine, current: C
     whitespaceExtensionLength = tokens[fittingTokens.length].length;
   }
 
-  const rangeStart = context.code.getIndexFromLoc({
+  const rangeStart = previous.context.code.getIndexFromLoc({
     line: previous.index,
     column: endIndexOf(previous, 'content')
   });
 
-  const rangeEnd = context.code.getIndexFromLoc({
+  const rangeEnd = previous.context.code.getIndexFromLoc({
     line: current.index,
     column: endIndexOf(current, 'prefix') + tokenText.length + whitespaceExtensionLength
   });
 
   const report: eslint.Rule.ReportDescriptor = {
-    node: context.node,
+    node: previous.context.node,
     loc: {
       start: {
         line: previous.index,
@@ -131,7 +131,7 @@ export function merge(context: CommentContext, previous: CommentLine, current: C
     messageId: 'merge',
     data: {
       line_length: `${current.text.length}`,
-      max_length: `${context.max_line_length}`
+      max_length: `${previous.context.max_line_length}`
     },
     fix: function (fixer) {
       return fixer.replaceTextRange([rangeStart, rangeEnd], replacementText);
