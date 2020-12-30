@@ -1,9 +1,8 @@
 import eslint from 'eslint';
-import estree from 'estree';
 import { CommentContext, CommentLine, endIndexOf } from './util';
 
 export function split(context: CommentContext, line: CommentLine) {
-  if (!updatePreformattedState(context, line.comment, line)) {
+  if (!updatePreformattedState(context, line)) {
     return;
   }
 
@@ -119,14 +118,13 @@ export function split(context: CommentContext, line: CommentLine) {
  * Detects transitions into and out of a preformatted state in a block comment. Returns whether the
  * text should still be considered for overflow.
  */
-function updatePreformattedState(context: CommentContext, comment: estree.Comment,
-  line: CommentLine) {
-  if (comment.type !== 'Block') {
+function updatePreformattedState(context: CommentContext, line: CommentLine) {
+  if (line.comment.type !== 'Block') {
     return true;
   }
 
   if (context.in_md_fence) {
-    if (line.index > comment.loc.start.line && line.content.startsWith('```')) {
+    if (line.index > line.comment.loc.start.line && line.content.startsWith('```')) {
       // Exiting markdown fence section. Do not consider overflow.
       context.in_md_fence = false;
       return false;
@@ -147,11 +145,11 @@ function updatePreformattedState(context: CommentContext, comment: estree.Commen
       // Remaining in jsdoc example section. Do not consider overflow.
       return false;
     }
-  } else if (line.index > comment.loc.start.line && line.content.startsWith('```')) {
+  } else if (line.index > line.comment.loc.start.line && line.content.startsWith('```')) {
     // Entering markdown fence section. Do not consider overflow.
     context.in_md_fence = true;
     return false;
-  } else if (line.index > comment.loc.start.line && line.content.startsWith('@example')) {
+  } else if (line.index > line.comment.loc.start.line && line.content.startsWith('@example')) {
     // Entering jsdoc example section. Do not consider overflow.
     context.in_jsdoc_example = true;
     return false;
