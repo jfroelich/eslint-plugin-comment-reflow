@@ -2,6 +2,10 @@ import eslint from 'eslint';
 import { CommentLine, endIndexOf, tokenize } from './util';
 
 export function merge(previous: CommentLine, current: CommentLine) {
+  if (!previous) {
+    return;
+  }
+
   if (previous.context.in_md_fence || previous.context.in_jsdoc_example) {
     return;
   }
