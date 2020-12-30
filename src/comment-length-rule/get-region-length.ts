@@ -4,36 +4,35 @@ type Region = keyof Pick<CommentLine,
   'lead_whitespace' | 'open' | 'close' | 'prefix' | 'content' | 'suffix' | 'close'>;
 
 /**
- * Returns the length of the text in the given line up to the start or end of the given region. If
- * inclusive is true then this is up to the end of the region.
+ * Returns the length of the text in the given line up to the end of the given region.
  */
-export function getRegionLength(line: CommentLine, region: Region, inclusive = true) {
+export function getRegionLength(line: CommentLine, region: Region) {
   switch (region) {
     case 'lead_whitespace': {
-      return inclusive ? line.lead_whitespace.length : 0;
+      return line.lead_whitespace.length;
     }
 
     case 'open': {
-      return line.lead_whitespace.length + (inclusive ? line.open.length : 0);
+      return line.lead_whitespace.length + line.open.length;
     }
 
     case 'prefix': {
-      return line.lead_whitespace.length + line.open.length + (inclusive ? line.prefix.length : 0);
+      return line.lead_whitespace.length + line.open.length + line.prefix.length;
     }
 
     case 'content': {
       return line.lead_whitespace.length + line.open.length + line.prefix.length +
-        (inclusive ? line.content.length : 0);
+        line.content.length;
     }
 
     case 'suffix': {
       return line.lead_whitespace.length + line.open.length + line.prefix.length +
-        line.content.length + (inclusive ? line.suffix.length : 0);
+        line.content.length + line.suffix.length;
     }
 
     case 'close': {
       return line.lead_whitespace.length + line.open.length + line.prefix.length +
-        line.content.length + line.suffix.length + (inclusive ? line.close.length : 0);
+        line.content.length + line.suffix.length + line.close.length;
     }
 
     default: {
