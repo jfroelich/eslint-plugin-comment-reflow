@@ -40,8 +40,7 @@ export function split(previous: CommentLine, current?: CommentLine) {
 
   // edge case for content under the limit but trailing whitespace over the limit
 
-  if (previous.comment.type === 'Line' &&
-    endIndexOf(previous, 'content') <= threshold &&
+  if (previous.comment.type === 'Line' && endIndexOf(previous, 'content') <= threshold &&
     endIndexOf(previous, 'suffix') > threshold) {
     return;
   }
@@ -55,53 +54,163 @@ export function split(previous: CommentLine, current?: CommentLine) {
     return;
   }
 
+  // Accumulate tokens until the total length of the remaining tokens is less than the threshold, or
+  // until there are no remaining tokens and there is at least one token meaning a hard break.
+
   const tokens = tokenize(previous.content);
-  let excessRemaining = endIndexOf(previous, 'close') - threshold;
+  let remaining = endIndexOf(previous, 'close');
   let tokenSplitIndex = -1;
+
   for (let i = tokens.length - 1; i > -1; i--) {
     const token = tokens[i];
-    if (token.length <= excessRemaining) {
+    const remainingAfterRemoval = remaining - token.length;
+
+    // The presence of this token in the previous line contributes to its exceeding the threshold.
+    // We know that there is some amount remaining because we know the threshold has been exceeded.
+    // If removing this token would leave only the prefix remaining for the line, we are dealing
+    // with one very large token that we need break apart. In this case we do not change the token
+    // split index and leave it at either -1 or its previous index and conclude the search.
+
+    if (remainingAfterRemoval === endIndexOf(previous, 'prefix')) {
+      break;
+    }
+
+    // The presence of this token in the previous line contributes to its exceeding the threshold.
+    // However, removing this token will not reduce the length of the previous line to before the
+    // threshold because the remaining amount event after removal is still after the threshold.
+    // Therefore, we should record that this token should be moved and continue searching for more
+    // tokens to move.
+
+    if (remainingAfterRemoval > threshold) {
       tokenSplitIndex = i;
-      excessRemaining -= token.length;
-    } else {
+      remaining -= token.length;
+      continue;
+    }
+
+    if (remaining - token.length <= threshold) {
+      // This is the final token to move. Moving this token will reduce the length of the previous
+      // line to before the threshold. We should count this token as being moved and stop searching.
+      tokenSplitIndex = i;
+      remaining -= token.length;
       break;
     }
   }
 
-  // TODO: if tokenSplitIndex is -1, we still split, we just do a hard split where we replace the
-  // last token with itself plus a line break.
+  let tokenText;
 
+  if (tokenSplitIndex === -1 || remaining > threshold) {
+    console.log('hard break');
+    // if we were unable to split nicely, then we want to hard break
+    tokenText = previous.text.slice(threshold);
+  } else {
+    const excessTokens = tokens.slice(tokenSplitIndex);
+    tokenText = excessTokens.join('');
+  }
+
+  let replacementText = '\n';
+
+  if (previous.comment.type === 'Line') {
+    replacementText += previous.lead_whitespace;
+    replacementText += previous.open;
+    replacementText += previous.prefix;
+
+    // TEMP: do not trim for a moment, examining tokens
+    // replacementText += tokenText.trimStart();
+
+    replacementText += tokenText;
+  } else if (previous.index === previous.comment.loc.start.line &&
+    previous.index === previous.comment.loc.end.line) {
+    // This is a one line block comment. We have to be careful about the open/close regions.
+
+    replacementText += previous.lead_whitespace;
+
+    // If the character after the comment start is *, then this looks like a javadoc comment. The
+    // new line introduced should have one extra leading space in the lead whitespace region.
+
+    if (previous.comment.type === 'Block' && previous.prefix.startsWith('*')) {
+      replacementText += ' ';
+    }
+
+    replacementText += previous.prefix;
+
+    // In the content region, introduce extra leading whitespace equal to the length of the markup.
+    // We do not copy over the markup, that would cause splitting of list items to create new list
+    // items, we just want the next line to be indented under the current list item.
+    // TODO: this is probably wrong, have to be more careful about what gets stored in markup.
+
+    replacementText += ''.padEnd(previous.markup.length + previous.markup_space.length);
+
+    replacementText += tokenText.trimStart();
+  } else if (previous.index === previous.comment.loc.start.line) {
+    // This comment starts on the first line of the block comment, but does not end on the first
+    // line of the block comment.
+
+    replacementText += previous.lead_whitespace;
+
+    // If the character after the comment start is *, then this looks like a javadoc comment. The
+    // new line introduced should have one extra leading space in the lead whitespace region.
+
+    if (previous.comment.type === 'Block' && previous.prefix.startsWith('*')) {
+      replacementText += ' ';
+    }
+
+    replacementText += previous.prefix;
+    replacementText += ''.padEnd(previous.markup.length + previous.markup_space.length);
+    replacementText += tokenText.trimStart();
+  } else if (previous.index === previous.comment.loc.end.line) {
+    // The final line of a block comment.
+
+    replacementText += previous.lead_whitespace;
+
+    if (previous.prefix.startsWith('*')) {
+      replacementText += previous.prefix;
+      replacementText += ''.padEnd(previous.markup.length + previous.markup_space.length);
+    }
+    replacementText += tokenText.trimStart();
+  } else {
+    // An intermediate line in a block comment.
+    replacementText += previous.lead_whitespace;
+    replacementText += previous.prefix;
+    replacementText += ''.padEnd(previous.markup.length +  previous.markup_space.length);
+    replacementText += tokenText.trimStart();
+  }
+
+  // Since we are moving text into the next line, which might have content, conditionally add in
+  // an extra space to ensure the moved text is not immediately adjacent.
+
+  if (current && current.content.charAt(0) !== ' ') {
+    replacementText += ' ';
+  }
+
+  console.log('replacement text: "%s"', replacementText.replace(/\n/, '\\n'));
+
+  // Compute the range start column. This is the position in the previous line where the break will
+  // occur, where 0 is the first position of the previous line. This is not the position in the
+  // entire file.
+
+  let rangeStartColumn: number;
   if (tokenSplitIndex === -1) {
-    return;
+    // when not finding a split, we are doing a hard break at the threshold
+    rangeStartColumn = threshold;
+  } else {
+    // if we found a split, then we are breaking at the point before the first token being moved
+    // to the next line
+    rangeStartColumn = previous.text.length - tokenText.length;
   }
 
-  const excessTokens = tokens.slice(tokenSplitIndex);
+  console.log('replacement range start column:', rangeStartColumn);
 
-  console.log('tokens to move:', excessTokens);
-
-  // TODO: see earlier todo, we still want to force the split.
-
-  if (excessTokens.length === 0) {
-    return;
-  }
-
-  const tokenText = excessTokens.join('');
-
-  // TODO: see the commented out code, we cannot simply include previous.open, it could be /*
-
-  const replacementText = '\n' + previous.lead_whitespace + previous.open + previous.prefix +
-    tokenText.trim();
-
-  console.log('replacement text:', replacementText.replace(/\n/, '\\n'));
+  // TODO: this is wrong, this should not be threshold, this should be the break position if found
+  // and then fallback to the threshold
 
   const rangeStart = previous.context.code.getIndexFromLoc({
     line: previous.index,
-    column: threshold
+    column: rangeStartColumn
   });
 
   const rangeEnd = previous.context.code.getIndexFromLoc({
     line: current ? current.index : previous.index,
-    column: current ? (endIndexOf(current, 'prefix') + tokenText.length) : previous.text.length
+    column: current ? endIndexOf(current, 'prefix') : previous.text.length
   });
 
   const report: eslint.Rule.ReportDescriptor = {
