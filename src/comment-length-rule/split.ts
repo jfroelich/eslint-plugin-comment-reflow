@@ -2,8 +2,8 @@ import eslint from 'eslint';
 import estree from 'estree';
 import { CommentContext, CommentLine, endIndexOf } from './util';
 
-export function split(context: CommentContext, comment: estree.Comment, line: CommentLine) {
-  if (!updatePreformattedState(context, comment, line)) {
+export function split(context: CommentContext, line: CommentLine) {
+  if (!updatePreformattedState(context, line.comment, line)) {
     return;
   }
 
@@ -25,11 +25,11 @@ export function split(context: CommentContext, comment: estree.Comment, line: Co
     return;
   }
 
-  if (line.index < comment.loc.end.line && endIndexOf(line, 'content') <= threshold) {
+  if (line.index < line.comment.loc.end.line && endIndexOf(line, 'content') <= threshold) {
     return;
   }
 
-  if (line.index === comment.loc.end.line && endIndexOf(line, 'close') <= threshold) {
+  if (line.index === line.comment.loc.end.line && endIndexOf(line, 'close') <= threshold) {
     return;
   }
 
@@ -37,7 +37,8 @@ export function split(context: CommentContext, comment: estree.Comment, line: Co
     return;
   }
 
-  if (comment.type === 'Block' && line.prefix.startsWith('*') && line.markup.startsWith('@see')) {
+  if (line.comment.type === 'Block' && line.prefix.startsWith('*') &&
+    line.markup.startsWith('@see')) {
     return;
   }
 
@@ -46,8 +47,8 @@ export function split(context: CommentContext, comment: estree.Comment, line: Co
   let lineBreakPosition = -1;
   if (contentBreakPosition > 0) {
     lineBreakPosition = contentBreakPosition;
-  } else if (comment.type === 'Block' && line.index === comment.loc.end.line &&
-    comment.loc.end.column - 1 === threshold) {
+  } else if (line.comment.type === 'Block' && line.index === line.comment.loc.end.line &&
+    line.comment.loc.end.column - 1 === threshold) {
     // Avoid breaking right in the middle of the close
     lineBreakPosition = threshold - 1;
   } else {
@@ -59,29 +60,29 @@ export function split(context: CommentContext, comment: estree.Comment, line: Co
 
   let textToInsert = '\n';
 
-  if (line.index === comment.loc.start.line && line.index === comment.loc.end.line) {
+  if (line.index === line.comment.loc.start.line && line.index === line.comment.loc.end.line) {
     textToInsert += line.text.slice(0, line.lead_whitespace.length);
 
     // avoid appending /* to the new line
-    if (comment.type === 'Line') {
+    if (line.comment.type === 'Line') {
       textToInsert += line.open;
     }
 
     // For a one line block comment that looks like javadoc when wrapping the first line, introduce
     // a new space.
 
-    if (comment.type === 'Block' && line.prefix.startsWith('*')) {
+    if (line.comment.type === 'Block' && line.prefix.startsWith('*')) {
       textToInsert += ' ';
     }
 
     textToInsert += line.prefix + ''.padEnd(line.markup.length + line.markup_space.length);
-  } else if (line.index === comment.loc.start.line) {
+  } else if (line.index === line.comment.loc.start.line) {
     textToInsert += line.text.slice(0, line.lead_whitespace.length);
     if (line.prefix.startsWith('*')) {
       // NOTE: unsure about this space
       textToInsert += ' ' + line.prefix + ''.padEnd(line.markup.length + line.markup_space.length);
     }
-  } else if (line.index === comment.loc.end.line) {
+  } else if (line.index === line.comment.loc.end.line) {
     textToInsert += line.text.slice(0, line.lead_whitespace.length);
     if (line.prefix.startsWith('*')) {
       textToInsert += line.prefix + ''.padEnd(line.markup.length + line.markup_space.length);
