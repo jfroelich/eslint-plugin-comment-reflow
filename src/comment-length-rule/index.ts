@@ -1,11 +1,9 @@
 import assert from 'assert';
 import eslint from 'eslint';
 import estree from 'estree';
-import { CommentContext } from './comment-context';
-import { CommentLine } from './comment-line';
 import { merge } from './merge';
-import { parseLine } from './parse-line';
 import { split } from './split';
+import { CommentContext, CommentLine, parseLine } from './util';
 
 export const commentLengthRule: eslint.Rule.RuleModule = {
   meta: {

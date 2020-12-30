@@ -1,8 +1,6 @@
-import type eslint from 'eslint';
-import type estree from 'estree';
-import { CommentContext } from './comment-context';
-import { CommentLine } from './comment-line';
-import { endIndexOf } from './end-index-of';
+import eslint from 'eslint';
+import estree from 'estree';
+import { CommentContext, CommentLine, endIndexOf } from './util';
 
 export function split(context: CommentContext, comment: estree.Comment, line: CommentLine) {
   if (!updatePreformattedState(context, comment, line)) {

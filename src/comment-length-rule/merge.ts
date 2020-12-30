@@ -1,9 +1,6 @@
 import eslint from 'eslint';
-import type estree from 'estree';
-import { CommentContext } from './comment-context';
-import { CommentLine } from './comment-line';
-import { endIndexOf } from "./end-index-of";
-import { tokenize } from './tokenize';
+import estree from 'estree';
+import { CommentContext, CommentLine, endIndexOf, tokenize } from './util';
 
 export function merge(context: CommentContext, type: estree.Comment['type'], previous: CommentLine,
   current: CommentLine) {
