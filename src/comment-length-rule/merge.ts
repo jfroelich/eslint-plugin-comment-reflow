@@ -22,6 +22,20 @@ export function merge(previous: CommentLine, current: CommentLine) {
     return;
   }
 
+  if (previous.lead_whitespace.length === current.lead_whitespace.length &&
+    previous.prefix.length !== current.prefix.length) {
+    if (previous.markup) {
+      // allow merge even though indentation because previous line is markup.
+      // for example, this might the second line of a bullet point with extra
+      // leading whitespace but if the first line of the bullet point is short
+      // we still want to merge.
+    } else {
+      // the two lines have different content indentation, assume this is not
+      // author laziness and do not merge.
+      return;
+    }
+  }
+
   // TODO: shouldn't this be end index of close, not suffix, even though close is empty? could it
   // ever not be empty? so in a single line case, there is no close, so it is empty. in the block
   // case, it is also empty, but only because we guarantee we never try to merge two blocks. still,
