@@ -2,7 +2,7 @@ import eslint from 'eslint';
 import type estree from 'estree';
 import { CommentContext } from './comment-context';
 import { CommentLine } from './comment-line';
-import { getRegionLength } from "./get-region-length";
+import { endIndexOf } from "./end-index-of";
 import { tokenize } from './tokenize';
 
 export function merge(context: CommentContext, type: estree.Comment['type'], previous: CommentLine,
@@ -23,7 +23,7 @@ export function merge(context: CommentContext, type: estree.Comment['type'], pre
     return;
   }
 
-  const previousLineEndPosition = getRegionLength(previous, 'suffix');
+  const previousLineEndPosition = endIndexOf(previous, 'suffix');
   if (previousLineEndPosition >= context.max_line_length) {
     return;
   }
@@ -113,12 +113,12 @@ export function merge(context: CommentContext, type: estree.Comment['type'], pre
 
   const rangeStart = context.code.getIndexFromLoc({
     line: previous.index,
-    column: getRegionLength(previous, 'content')
+    column: endIndexOf(previous, 'content')
   });
 
   const rangeEnd = context.code.getIndexFromLoc({
     line: current.index,
-    column: getRegionLength(current, 'prefix') + tokenText.length + whitespaceExtensionLength
+    column: endIndexOf(current, 'prefix') + tokenText.length + whitespaceExtensionLength
   });
 
   const report: eslint.Rule.ReportDescriptor = {

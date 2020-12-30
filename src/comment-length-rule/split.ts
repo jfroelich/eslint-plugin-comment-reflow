@@ -2,7 +2,7 @@ import type eslint from 'eslint';
 import type estree from 'estree';
 import { CommentContext } from './comment-context';
 import { CommentLine } from './comment-line';
-import { getRegionLength } from './get-region-length';
+import { endIndexOf } from './end-index-of';
 
 export function split(context: CommentContext, comment: estree.Comment, line: CommentLine) {
   if (!updatePreformattedState(context, comment, line)) {
@@ -19,19 +19,19 @@ export function split(context: CommentContext, comment: estree.Comment, line: Co
     return;
   }
 
-  if (getRegionLength(line, 'open') >= threshold) {
+  if (endIndexOf(line, 'open') >= threshold) {
     return;
   }
 
-  if (getRegionLength(line, 'prefix') >= threshold) {
+  if (endIndexOf(line, 'prefix') >= threshold) {
     return;
   }
 
-  if (line.index < comment.loc.end.line && getRegionLength(line, 'content') <= threshold) {
+  if (line.index < comment.loc.end.line && endIndexOf(line, 'content') <= threshold) {
     return;
   }
 
-  if (line.index === comment.loc.end.line && getRegionLength(line, 'close') <= threshold) {
+  if (line.index === comment.loc.end.line && endIndexOf(line, 'close') <= threshold) {
     return;
   }
 
@@ -167,7 +167,7 @@ function updatePreformattedState(context: CommentContext, comment: estree.Commen
  * so as to not match whitespace in other places.
  */
 export function findContentBreak(line: CommentLine, threshold: number) {
-  if (getRegionLength(line, 'suffix') <= threshold) {
+  if (endIndexOf(line, 'suffix') <= threshold) {
     return -1;
   }
 
@@ -180,9 +180,9 @@ export function findContentBreak(line: CommentLine, threshold: number) {
 
   // Determine the search space for searching for space.
 
-  const regionStart = getRegionLength(line, 'prefix') + line.markup.length +
+  const regionStart = endIndexOf(line, 'prefix') + line.markup.length +
     line.markup_space.length;
-  const regionEnd = Math.min(threshold, getRegionLength(line, 'content'));
+  const regionEnd = Math.min(threshold, endIndexOf(line, 'content'));
   const region = line.text.slice(regionStart, regionEnd);
 
   // Find the last space in the last sequence of spaces.

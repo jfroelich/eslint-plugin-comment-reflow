@@ -6,7 +6,7 @@ type Region = keyof Pick<CommentLine,
 /**
  * Returns the length of the text in the given line up to the end of the given region.
  */
-export function getRegionLength(line: CommentLine, region: Region) {
+export function endIndexOf(line: CommentLine, region: Region) {
   switch (region) {
     case 'lead_whitespace': {
       return line.lead_whitespace.length;
