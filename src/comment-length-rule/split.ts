@@ -121,61 +121,8 @@ export function split(current: CommentLine, next?: CommentLine) {
   if (current.comment.type === 'Line') {
     assert(endIndexOf(current, 'content') > threshold, 'content under threshold');
 
-    // Start by tokenizing the content. We want to determine which words should be moved to the next
-    // line. We prefer to move entire words instead of inserting line breaks in the middle of words.
-
     const tokens = tokenize(current.content);
-    let remaining = endIndexOf(current, 'content');
-    let tokenSplitIndex = -1;
-
-    for (let i = tokens.length - 1; i > -1; i--) {
-      const token = tokens[i];
-
-      // If moving this content token to the next line would leave only the prefix remaining for the
-      // current line, it means that we parsed a token that starts immediately after the prefix,
-      // which only happens when there is one large token starting the content that itself causes
-      // the line to overflow. In this case we do not want to decrement remaining and we do not want
-      // to set the index as found. Keep in mind this may not have been the only token on the line,
-      // it is just the last visited one that no longer fits, so the index could either be -1 or
-      // some later index for some subsequent token that only starts after the threshold. We break
-      // here because we know there is no longer a point in looking at earlier tokens and that there
-      // are no other tokens so we want to avoid checking other things.
-
-      if (remaining - token.length === endIndexOf(current, 'prefix')) {
-        // we reset the index. if we ran into a big token at the start, it means we are going to
-        // have to hard break the token itself, and since later code relies on this, we want to
-        // ensure we report not found.
-        tokenSplitIndex = -1;
-        break;
-      }
-
-      // Handle those tokens that are positioned entirely after the threshold. Removing the tokens
-      // leading up to this token along with this token are not enough to find a split. We need to
-      // continue searching backward. Shift the index, since this is a token that will be moved.
-      // Update remaining, since this is a token that will be moved.
-
-      if (remaining - token.length > threshold) {
-        tokenSplitIndex = i;
-        remaining -= token.length;
-        continue;
-      }
-
-      // Handle a token that crosses the threshold. Since we are iterating backward, we want to stop
-      // searching the first time this condition is true. This is the final token to move.
-
-      if (remaining - token.length <= threshold) {
-        tokenSplitIndex = i;
-        remaining -= token.length;
-        break;
-      }
-    }
-
-    // Account for soft break preceding hyphenated word.
-
-    if (tokenSplitIndex > 0 && tokens[tokenSplitIndex] === '-' &&
-      remaining - tokens[tokenSplitIndex - 1].length > endIndexOf(current, 'prefix')) {
-      tokenSplitIndex--;
-    }
+    const tokenSplitIndex = findTokenSplit(current, tokens);
 
     // Determine the splitting position in the content. If the token index points to a whitespace
     // token, move the position to after the token. The whitespace token will remain on the current
@@ -274,6 +221,62 @@ export function split(current: CommentLine, next?: CommentLine) {
 
     return report;
   }
+}
+
+function findTokenSplit(current: CommentLine, tokens: string[]) {
+  let remaining = endIndexOf(current, 'content');
+  let tokenSplitIndex = -1;
+
+  for (let i = tokens.length - 1; i > -1; i--) {
+    const token = tokens[i];
+
+    // If moving this content token to the next line would leave only the prefix remaining for the
+    // current line, it means that we parsed a token that starts immediately after the prefix,
+    // which only happens when there is one large token starting the content that itself causes
+    // the line to overflow. In this case we do not want to decrement remaining and we do not want
+    // to set the index as found. Keep in mind this may not have been the only token on the line,
+    // it is just the last visited one that no longer fits, so the index could either be -1 or
+    // some later index for some subsequent token that only starts after the threshold. We break
+    // here because we know there is no longer a point in looking at earlier tokens and that there
+    // are no other tokens so we want to avoid checking other things.
+
+    if (remaining - token.length === endIndexOf(current, 'prefix')) {
+      // we reset the index. if we ran into a big token at the start, it means we are going to
+      // have to hard break the token itself, and since later code relies on this, we want to
+      // ensure we report not found.
+      tokenSplitIndex = -1;
+      break;
+    }
+
+    // Handle those tokens that are positioned entirely after the threshold. Removing the tokens
+    // leading up to this token along with this token are not enough to find a split. We need to
+    // continue searching backward. Shift the index, since this is a token that will be moved.
+    // Update remaining, since this is a token that will be moved.
+
+    if (remaining - token.length > current.context.max_line_length) {
+      tokenSplitIndex = i;
+      remaining -= token.length;
+      continue;
+    }
+
+    // Handle a token that crosses the threshold. Since we are iterating backward, we want to stop
+    // searching the first time this condition is true. This is the final token to move.
+
+    if (remaining - token.length <= current.context.max_line_length) {
+      tokenSplitIndex = i;
+      remaining -= token.length;
+      break;
+    }
+  }
+
+  // Account for soft break preceding hyphenated word.
+
+  if (tokenSplitIndex > 0 && tokens[tokenSplitIndex] === '-' &&
+    remaining - tokens[tokenSplitIndex - 1].length > endIndexOf(current, 'prefix')) {
+    tokenSplitIndex--;
+  }
+
+  return tokenSplitIndex;
 }
 
 /**
