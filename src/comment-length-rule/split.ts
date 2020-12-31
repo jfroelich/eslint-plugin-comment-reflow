@@ -121,7 +121,6 @@ export function split(previous: CommentLine, current?: CommentLine) {
   }
 
   // Handle line comments
-  // TODO: support hyphens
 
   if (previous.comment.type === 'Line') {
     assert(endIndexOf(previous, 'content') > threshold, 'content under threshold');
@@ -174,6 +173,13 @@ export function split(previous: CommentLine, current?: CommentLine) {
         remaining -= token.length;
         break;
       }
+    }
+
+    // Account for soft break preceding hyphenated word.
+
+    if (tokenSplitIndex > 0 && tokens[tokenSplitIndex] === '-' &&
+      remaining - tokens[tokenSplitIndex - 1].length > endIndexOf(previous, 'prefix')) {
+      tokenSplitIndex--;
     }
 
     // Determine the position in content that is being split. If the token index points to a
