@@ -60,7 +60,6 @@ function analyzeProgram(ruleContext: eslint.Rule.RuleContext, node: estree.Node)
     if (comment.type === 'Block') {
       previousLine = null;
 
-      let lineCounter = 0;
       for (let line = comment.loc.start.line; line <= comment.loc.end.line; line++) {
         const currentLine = parseLine(context, comment, line);
 
@@ -77,14 +76,13 @@ function analyzeProgram(ruleContext: eslint.Rule.RuleContext, node: estree.Node)
         }
 
         previousLine = currentLine;
-        lineCounter++;
       }
 
-      if (lineCounter % 2 == 1) {
-        const report = split(previousLine);
-        if (report) {
-          ruleContext.report(report);
-        }
+      // we have to call split once more for the final line of the comment
+
+      const report = split(previousLine);
+      if (report) {
+        ruleContext.report(report);
       }
 
       previousLine = null;
