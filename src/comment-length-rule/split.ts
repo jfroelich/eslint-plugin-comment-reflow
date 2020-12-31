@@ -1,5 +1,6 @@
 import assert from 'assert';
 import eslint from 'eslint';
+import estree from 'estree';
 import { CommentLine, endIndexOf, tokenize } from './util';
 
 export function split(previous: CommentLine, current?: CommentLine) {
@@ -120,13 +121,15 @@ export function split(previous: CommentLine, current?: CommentLine) {
   }
 
   // Handle line comments
+  // TODO: support hyphens
 
   if (previous.comment.type === 'Line') {
     assert(endIndexOf(previous, 'content') > threshold, 'content under threshold');
 
     // Start by tokenizing the content. We want to determine which words should be moved to the next
     // line. We prefer to move entire words instead of inserting line breaks in the middle of words.
-    // We are using tokens instead of whitespace searching so that we use similar logic to merge.
+    // We are using logic based on tokens so that we ensure we have the same concept of tokens as
+    // the line merge process.
 
     const tokens = tokenize(previous.content);
     let remaining = endIndexOf(previous, 'content');
@@ -173,11 +176,15 @@ export function split(previous: CommentLine, current?: CommentLine) {
       }
     }
 
-    // Determine the position in line.content that is being split.
+    // Determine the position in content that is being split. If the token index points to a
+    // whitespace token, move the break point to after the token. The whitespace token will remain
+    // on the previous line as its suffix.
 
     let contentBreakpoint: number;
     if (tokenSplitIndex === -1) {
       contentBreakpoint = threshold - endIndexOf(previous, 'prefix');
+    } else if (tokens[tokenSplitIndex].trim().length === 0) {
+      contentBreakpoint = tokens.slice(0, tokenSplitIndex + 1).join('').length;
     } else {
       contentBreakpoint = tokens.slice(0, tokenSplitIndex).join('').length;
     }
@@ -185,8 +192,7 @@ export function split(previous: CommentLine, current?: CommentLine) {
     console.debug('content break point:', contentBreakpoint);
     console.log('remaining content: "%s"', previous.content.slice(contentBreakpoint));
 
-    // Determine where to break the previous content based on tokenization. This is the position in
-    // the line, not the content.
+    // Determine where to break the previous line (not content).
 
     let lineBreakpoint: number;
     if (tokenSplitIndex === -1) {
@@ -197,7 +203,7 @@ export function split(previous: CommentLine, current?: CommentLine) {
 
     console.log('line breakpoint:', lineBreakpoint);
 
-    // Now build the replacement text Since we are moving text into the next line, which might have
+    // Now build the replacement text. Since we are moving text into the next line, which might have
     // content, conditionally add in an extra space to ensure the moved text is not immediately
     // adjacent.
 
@@ -205,10 +211,8 @@ export function split(previous: CommentLine, current?: CommentLine) {
     replacementText += previous.lead_whitespace;
     replacementText += previous.open;
     replacementText += previous.prefix;
-
     replacementText += previous.content.slice(contentBreakpoint);
-
-    if (current && current.content.charAt(0) !== ' ') {
+    if (current && current.content) {
       replacementText += ' ';
     }
 
@@ -225,13 +229,37 @@ export function split(previous: CommentLine, current?: CommentLine) {
 
     // Determine the end position of the text that is being replaced. If there is a current line,
     // then the end position is just after the current line's prefix. If there is no current line,
-    // then the end position is the end of the previous line.
+    // then the end position is the end of the previous line. If there is a current line, we also
+    // need to inspect whether it is empty. If the current line has content, then we replace into
+    // it. If the current line has no content, it is an intentionally empty line, so we do not
+    // replace into it, and pretend it does not exist, and insert.
 
-    const rangeEndColumn = current ? endIndexOf(current, 'prefix') : endIndexOf(previous, 'suffix');
+    // TODO: we also need to set end loc conditionally
+
+    let rangeEndLine: number;
+    let rangeEndColumn: number;
+    let endLocPosition: estree.Position;
+
+    if (current && current.content) {
+      rangeEndLine = current.index;
+      rangeEndColumn = endIndexOf(current, 'prefix');
+      endLocPosition = {
+        line: current.index,
+        column: current.comment.loc.end.column
+      };
+    } else {
+      rangeEndLine = previous.index;
+      rangeEndColumn = endIndexOf(previous, 'suffix');
+      endLocPosition = {
+        line: previous.index,
+        column: previous.text.length
+      };
+    }
+
     console.log('range end column:', rangeEndColumn);
 
     const rangeEnd = previous.context.code.getIndexFromLoc({
-      line: current ? current.index : previous.index,
+      line: rangeEndLine,
       column: rangeEndColumn
     });
 
@@ -242,10 +270,7 @@ export function split(previous: CommentLine, current?: CommentLine) {
           line: previous.index,
           column: 0
         },
-        end: {
-          line: current ? current.index : previous.index,
-          column: current ? current.comment.loc.end.column : previous.text.length
-        }
+        end: endLocPosition
       },
       messageId: 'split',
       data: {
