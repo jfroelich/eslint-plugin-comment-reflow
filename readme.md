@@ -28,12 +28,12 @@ Using `eslint-plugin-comment-reflow` as the plugin name also works.
 3. Add the rule to the eslint config:
 ```json
 {
-  "rules": [
+  "rules": {
     "comment-reflow/comment-length": [
       "error",
       100
     ]
-  ]
+  }
 }
 ```
 The second element of the array is the point at which to wrap lines.
