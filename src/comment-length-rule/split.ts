@@ -4,9 +4,8 @@ import estree from 'estree';
 import { CommentLine, endIndexOf, tokenize } from './util';
 
 export function split(previous: CommentLine, current?: CommentLine) {
-  if (current && (previous.index + 1 !== current.index)) {
-    return;
-  }
+  assert(!current || previous.index + 1 === current.index,
+    `Line ${previous.index} does not immediately precede line ${current.index}`);
 
   if (!updatePreformattedState(previous)) {
     return;

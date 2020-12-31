@@ -64,7 +64,7 @@ function analyzeProgram(ruleContext: eslint.Rule.RuleContext, node: estree.Node)
         const currentLine = parseLine(context, comment, line);
 
         if (previousLine) {
-          const report = split(previousLine, currentLine);
+          const report = split(previousLine, previousLine.index + 1 === line ? currentLine : null);
           if (report) {
             ruleContext.report(report);
           }
@@ -90,7 +90,8 @@ function analyzeProgram(ruleContext: eslint.Rule.RuleContext, node: estree.Node)
       const currentLine = parseLine(context, comment, comment.loc.start.line);
 
       if (previousLine)  {
-        const report = split(previousLine, currentLine);
+        const report = split(previousLine,
+          previousLine.index + 1 === currentLine.index ? currentLine : null);
         if (report) {
           ruleContext.report(report);
         }
