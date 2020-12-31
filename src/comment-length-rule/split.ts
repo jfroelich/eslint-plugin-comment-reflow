@@ -124,15 +124,7 @@ export function split(current: CommentLine, next?: CommentLine) {
     const tokens = tokenize(current.content);
     const tokenSplitIndex = findTokenSplit(current, tokens);
     const contentBreakpoint = findContentBreak(current, tokens, tokenSplitIndex);
-
-    // Determine where to break the line.
-
-    let lineBreakpoint: number;
-    if (tokenSplitIndex === -1) {
-      lineBreakpoint = threshold;
-    } else {
-      lineBreakpoint = endIndexOf(current, 'prefix') + contentBreakpoint;
-    }
+    const lineBreakpoint = findLineBreak(current, tokenSplitIndex, contentBreakpoint);
 
     // Compose the replacement text. Since we are moving text into the next line, which might have
     // content, conditionally add in an extra space to ensure the moved text is not immediately
@@ -283,6 +275,20 @@ function findContentBreak(current: CommentLine, tokens: string[], tokenSplitInde
   }
 
   return contentBreakpoint;
+}
+
+function findLineBreak(current: CommentLine, tokenSplitIndex: number, contentBreakpoint: number) {
+  let lineBreakpoint: number;
+
+  // Determine where to break the line.
+
+  if (tokenSplitIndex === -1) {
+    lineBreakpoint = current.context.max_line_length;
+  } else {
+    lineBreakpoint = endIndexOf(current, 'prefix') + contentBreakpoint;
+  }
+
+  return lineBreakpoint;
 }
 
 /**
