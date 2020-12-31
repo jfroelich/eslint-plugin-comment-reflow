@@ -1,3 +1,4 @@
+import assert from 'assert';
 import eslint from 'eslint';
 import { CommentLine, endIndexOf, tokenize } from './util';
 
@@ -40,9 +41,10 @@ export function split(previous: CommentLine, current?: CommentLine) {
 
   // Handle a peculiar edge case because of support for authors who do not use no-trailing-spaces.
   // We have to be considerate of trailing whitespace. It is possible that the content is visibly
-  // under the limit, but the trailing whitespace pushes it over the limit. This only applies when
-  // the whitespace is not visibly part of the content, meaning that this applies to all situations
-  // other than the final line of a block comment.
+  // under the limit, but the trailing whitespace pushes the end position of the comment over the
+  // limit. This only applies when the whitespace is not visibly part of the content, meaning that
+  // this applies to all situations other than the final line of a block comment because that is the
+  // only situation where there is close syntax.
 
   if ((previous.comment.type === 'Line' || previous.index !== previous.comment.loc.end.line) &&
     endIndexOf(previous, 'content') <= threshold && endIndexOf(previous, 'suffix') > threshold) {
@@ -58,9 +60,18 @@ export function split(previous: CommentLine, current?: CommentLine) {
     return;
   }
 
+  // The thought process is as follows. I want to eventually use one common set of logic for each
+  // of the scenarios. However, the various scenarios are complicated and the different concerns
+  // all mixed together so I am going to solve the scenarios one at a time, get a minimally working
+  // example, and then examine how the scenarios have commonality. So this is not the way I wanted
+  // to do it but it is a way that going forward will work until I have a clearer picture. What this
+  // is, is an interim solution. There is going to be some repetitive code.
+
   // Single out the special case of processing a line that is the final line of a block comment,
   // where the content is under the limit, but the closing comment syntax, with our without the
-  // whitespace between the content and the close, is over the limit.
+  // whitespace between the content and the close, is over the limit. In this scenario, there is no
+  // need to tokenize the content in order to determine where to split, and there is no need to
+  // consider the next line of the comment or the next comment.
 
   if (previous.comment.type === 'Block' && previous.index === previous.comment.loc.end.line &&
     endIndexOf(previous, 'content') <= threshold) {
@@ -72,8 +83,6 @@ export function split(previous: CommentLine, current?: CommentLine) {
       replacementText += ' ';
     }
 
-    replacementText += previous.close;
-
     const rangeStart = previous.context.code.getIndexFromLoc({
       line: previous.index,
       column: endIndexOf(previous, 'content')
@@ -81,7 +90,8 @@ export function split(previous: CommentLine, current?: CommentLine) {
 
     const rangeEnd = previous.context.code.getIndexFromLoc({
       line: current ? current.index : previous.index,
-      column: previous.comment.loc.end.column
+      // subtract 2 for the close syntax
+      column: previous.comment.loc.end.column - previous.close.length
     });
 
     const report: eslint.Rule.ReportDescriptor = {
@@ -109,272 +119,203 @@ export function split(previous: CommentLine, current?: CommentLine) {
     return report;
   }
 
-  // TODO: this is completely broken now for block comments, it is replacing the wrong stuff and
-  // breaking the end of the comment.
-  // TODO: we do not want to tokenize the content and its trailing whitespace unless the suffix
-  // length is over the limit. if it is the final line of a block comment and only the close syntax
-  // is over the limit, we shouldn't be tokenizing anything.
-
-  let rangeStartColumn: number;
-  let rangeEndColumn: number;
-
-  const tokens = tokenize(previous.content);
-  let remaining = endIndexOf(previous, 'suffix');
-  let tokenSplitIndex = -1;
-
-  for (let i = tokens.length - 1; i > -1; i--) {
-    const token = tokens[i];
-    const remainingAfterRemoval = remaining - token.length;
-
-    // The presence of this token in the previous line contributes to its exceeding the threshold.
-    // We know that there is some amount remaining because we know the threshold has been exceeded.
-    // If removing this token would leave only the prefix remaining for the line, we are dealing
-    // with one very large token that we need break apart. In this case we do not change the token
-    // split index and leave it at either -1 or its previous index and conclude the search.
-
-    if (remainingAfterRemoval === endIndexOf(previous, 'prefix')) {
-      break;
-    }
-
-    // The presence of this token in the previous line contributes to its exceeding the threshold.
-    // However, removing this token will not reduce the length of the previous line to before the
-    // threshold because the remaining amount event after removal is still after the threshold.
-    // Therefore, we should record that this token should be moved and continue searching for more
-    // tokens to move.
-
-    if (remainingAfterRemoval > threshold) {
-      tokenSplitIndex = i;
-      remaining -= token.length;
-      continue;
-    }
-
-    if (remaining - token.length <= threshold) {
-      // This is the final token to move. Moving this token will reduce the length of the previous
-      // line to before the threshold. We should count this token as being moved and stop searching.
-      tokenSplitIndex = i;
-      remaining -= token.length;
-      break;
-    }
-  }
-
-  let tokenText;
-
-  if (tokenSplitIndex === -1 || remaining > threshold) {
-    // if we were unable to split nicely, then we want to hard break
-    // TODO: i dont think this works, this ends up including close
-    tokenText = previous.text.slice(threshold);
-  } else {
-    const excessTokens = tokens.slice(tokenSplitIndex);
-    tokenText = excessTokens.join('');
-  }
-
-  let replacementText = '\n';
+  // Handle line comments
 
   if (previous.comment.type === 'Line') {
+    assert(endIndexOf(previous, 'content') > threshold, 'content under threshold');
+
+    // Start by tokenizing the content. We want to determine which words should be moved to the next
+    // line. We prefer to move entire words instead of inserting line breaks in the middle of words.
+    // We are using tokens instead of whitespace searching so that we use similar logic to merge.
+
+    const tokens = tokenize(previous.content);
+    let remaining = endIndexOf(previous, 'content');
+    let tokenSplitIndex = -1;
+
+    for (let i = tokens.length - 1; i > -1; i--) {
+      const token = tokens[i];
+
+      // If moving this content token to the next line would leave only the prefix remaining for the
+      // previous line, it means that we parsed a token that starts immediately after the prefix,
+      // which only happens when there is one large token starting the content that itself causes
+      // the line to overflow. In this case we do not want to decrement remaining and we do not want
+      // to set the index as found. Keep in mind this may not have been the only token on the line,
+      // it is just the last visited one that no longer fits, so the index could either be -1 or
+      // some later index for some subsequent token that only starts after the threshold. We break
+      // here because we know there is no longer a point in looking at earlier tokens and that there
+      // are no other tokens so we want to avoid checking other things.
+
+      if (remaining - token.length === endIndexOf(previous, 'prefix')) {
+        // we reset the index. if we ran into a big token at the start, it means we are going to
+        // have to hard break the token itself, and we no longer care what the index was.
+        tokenSplitIndex = -1;
+        break;
+      }
+
+      // Handle those tokens that are positioned entirely after the threshold. Removing the tokens
+      // leading up to this token along with this token are not enough to find a split. We need to
+      // continue searching backward. Shift the index, since this is a token that will be moved.
+      // Update remaining, since this is a token that will be moved.
+
+      if (remaining - token.length > threshold) {
+        tokenSplitIndex = i;
+        remaining -= token.length;
+        continue;
+      }
+
+      // Handle a token that crosses the threshold. Since we are iterating backward, we want to stop
+      // searching the first time this condition is true. This is the final token to move.
+
+      if (remaining - token.length <= threshold) {
+        tokenSplitIndex = i;
+        remaining -= token.length;
+        break;
+      }
+    }
+
+    // Determine the position in line.content that is being split.
+
+    let contentBreakpoint: number;
+    if (tokenSplitIndex === -1) {
+      contentBreakpoint = threshold - endIndexOf(previous, 'prefix');
+    } else {
+      contentBreakpoint = tokens.slice(0, tokenSplitIndex).join('').length;
+    }
+
+    console.debug('content break point:', contentBreakpoint);
+    console.log('remaining content: "%s"', previous.content.slice(contentBreakpoint));
+
+    // Determine where to break the previous content based on tokenization. This is the position in
+    // the line, not the content.
+
+    let lineBreakpoint: number;
+    if (tokenSplitIndex === -1) {
+      lineBreakpoint = threshold;
+    } else {
+      lineBreakpoint = endIndexOf(previous, 'prefix') + contentBreakpoint;
+    }
+
+    console.log('line breakpoint:', lineBreakpoint);
+
+    // Now build the replacement text Since we are moving text into the next line, which might have
+    // content, conditionally add in an extra space to ensure the moved text is not immediately
+    // adjacent.
+
+    let replacementText = '\n';
     replacementText += previous.lead_whitespace;
     replacementText += previous.open;
     replacementText += previous.prefix;
-    replacementText += tokenText.trimStart();
-  } else if (previous.index === previous.comment.loc.start.line &&
-    previous.index === previous.comment.loc.end.line) {
-    // This is a one line block comment. We have to be careful about the open/close regions.
 
-    replacementText += previous.lead_whitespace;
+    replacementText += previous.content.slice(contentBreakpoint);
 
-    // If the character after the comment start is *, then this looks like a javadoc comment. The
-    // new line introduced should have one extra leading space in the lead whitespace region.
-
-    if (previous.comment.type === 'Block' && previous.prefix.startsWith('*')) {
+    if (current && current.content.charAt(0) !== ' ') {
       replacementText += ' ';
     }
 
-    replacementText += previous.prefix;
+    console.log('replacement text: "%s"', replacementText.replace(/\n/, '\\n'));
 
-    // In the content region, introduce extra leading whitespace equal to the length of the markup.
-    // We do not copy over the markup, that would cause splitting of list items to create new list
-    // items, we just want the next line to be indented under the current list item.
-    // TODO: this is probably wrong, have to be more careful about what gets stored in markup.
+    // Determime the region of text that is being replaced.
 
-    replacementText += ''.padEnd(previous.markup.length + previous.markup_space.length);
+    // We start at the place where we want to insert a new line break.
 
-    replacementText += tokenText.trimStart();
-  } else if (previous.index === previous.comment.loc.start.line) {
-    // This comment starts on the first line of the block comment, but does not end on the first
-    // line of the block comment.
+    const rangeStart = previous.context.code.getIndexFromLoc({
+      line: previous.index,
+      column: lineBreakpoint
+    });
 
-    replacementText += previous.lead_whitespace;
+    // Determine the end position of the text that is being replaced. If there is a current line,
+    // then the end position is just after the current line's prefix. If there is no current line,
+    // then the end position is the end of the previous line.
 
-    // If the character after the comment start is *, then this looks like a javadoc comment. The
-    // new line introduced should have one extra leading space in the lead whitespace region.
+    const rangeEndColumn = current ? endIndexOf(current, 'prefix') : endIndexOf(previous, 'suffix');
+    console.log('range end column:', rangeEndColumn);
 
-    if (previous.comment.type === 'Block' && previous.prefix.startsWith('*')) {
-      replacementText += ' ';
-    }
+    const rangeEnd = previous.context.code.getIndexFromLoc({
+      line: current ? current.index : previous.index,
+      column: rangeEndColumn
+    });
 
-    replacementText += previous.prefix;
-    replacementText += ''.padEnd(previous.markup.length + previous.markup_space.length);
-    replacementText += tokenText.trimStart();
-  } else if (previous.index === previous.comment.loc.end.line) {
-    // The final line of a block comment.
-
-    replacementText += previous.lead_whitespace;
-
-    if (previous.prefix.startsWith('*')) {
-      replacementText += previous.prefix;
-      replacementText += ''.padEnd(previous.markup.length + previous.markup_space.length);
-    }
-    replacementText += tokenText.trimStart();
-  } else {
-    // An intermediate line in a block comment.
-    replacementText += previous.lead_whitespace;
-    replacementText += previous.prefix;
-    replacementText += ''.padEnd(previous.markup.length +  previous.markup_space.length);
-    replacementText += tokenText.trimStart();
-  }
-
-  // Since we are moving text into the next line, which might have content, conditionally add in
-  // an extra space to ensure the moved text is not immediately adjacent.
-
-  if (current && current.content.charAt(0) !== ' ') {
-    replacementText += ' ';
-  }
-
-  console.log('replacement text: "%s"', replacementText.replace(/\n/, '\\n'));
-
-  // Compute the range start column. This is the position in the previous line where the break will
-  // occur, where 0 is the first position of the previous line. This is not the position in the
-  // entire file.
-
-  if (tokenSplitIndex === -1) {
-    // when not finding a split, we are doing a hard break at the threshold
-    rangeStartColumn = threshold;
-  } else {
-    // if we found a split, then we are breaking at the point before the first token being moved
-    // to the next line
-
-    // TODO: add +1 ? is this off? something is wrong possibly here
-
-    rangeStartColumn = previous.text.length - tokenText.length;
-    console.log('found a split, so range start column is', rangeStartColumn);
-  }
-
-  const rangeStart = previous.context.code.getIndexFromLoc({
-    line: previous.index,
-    column: rangeStartColumn
-  });
-
-  if (current) {
-    // we are replacing into the next line, just after the prefix
-    rangeEndColumn = endIndexOf(current, 'prefix');
-  } else {
-    // we are replacing part of the previous line only
-    // in this case, there is is no next line. so we do not want to replace past the end of the
-    // current line's suffix.
-    rangeEndColumn = endIndexOf(previous, 'suffix');
-  }
-
-  console.log('range end column:', rangeEndColumn);
-
-  const rangeEnd = previous.context.code.getIndexFromLoc({
-    line: current ? current.index : previous.index,
-    column: rangeEndColumn
-  });
-
-  const report: eslint.Rule.ReportDescriptor = {
-    node: previous.context.node,
-    loc: {
-      start: {
-        line: previous.index,
-        column: 0
+    const report: eslint.Rule.ReportDescriptor = {
+      node: previous.context.node,
+      loc: {
+        start: {
+          line: previous.index,
+          column: 0
+        },
+        end: {
+          line: current ? current.index : previous.index,
+          column: current ? current.comment.loc.end.column : previous.text.length
+        }
       },
-      end: {
-        line: current ? current.index : previous.index,
-        column: current ? current.text.length : previous.text.length
+      messageId: 'split',
+      data: {
+        line_length: `${previous.text.length}`,
+        max_length: `${previous.context.max_line_length}`
+      },
+      fix: function (fixer) {
+        return fixer.replaceTextRange([rangeStart, rangeEnd], replacementText);
       }
-    },
-    messageId: 'split',
-    data: {
-      line_length: `${previous.text.length}`,
-      max_length: `${previous.context.max_line_length}`
-    },
-    fix: function (fixer) {
-      return fixer.replaceTextRange([rangeStart, rangeEnd], replacementText);
-    }
-  };
+    };
 
-  return report;
+    return report;
+  }
 
-  // const contentBreakPosition = findContentBreak(previous);
+  // if (previous.index === previous.comment.loc.start.line &&
+  //   previous.index === previous.comment.loc.end.line) {
+  //   // This is a one line block comment. We have to be careful about the open/close regions.
 
-  // let lineBreakPosition = -1;
-  // if (contentBreakPosition > 0) {
-  //   lineBreakPosition = contentBreakPosition;
-  // } else if (previous.comment.type === 'Block' && previous.index === previous.comment.loc.end.line &&
-  //   previous.comment.loc.end.column - 1 === threshold) {
-  //   // Avoid breaking right in the middle of the close
-  //   lineBreakPosition = threshold - 1;
-  // } else {
-  //   lineBreakPosition = threshold;
-  // }
+  //   replacementText += previous.lead_whitespace;
 
-  // const lineStartIndex = previous.context.code.getIndexFromLoc({ line: previous.index, column: 0 });
-  // const insertAfterRange: eslint.AST.Range = [0, lineStartIndex + lineBreakPosition];
-
-  // let textToInsert = '\n';
-
-  // if (previous.index === previous.comment.loc.start.line && previous.index === previous.comment.loc.end.line) {
-  //   textToInsert += previous.text.slice(0, previous.lead_whitespace.length);
-
-  //   // avoid appending /* to the new line
-  //   if (previous.comment.type === 'Line') {
-  //     textToInsert += previous.open;
-  //   }
-
-  //   // For a one line block comment that looks like javadoc when wrapping the first line, introduce
-  //   // a new space.
+  //   // If the character after the comment start is *, then this looks like a javadoc comment. The
+  //   // new line introduced should have one extra leading space in the lead whitespace region.
 
   //   if (previous.comment.type === 'Block' && previous.prefix.startsWith('*')) {
-  //     textToInsert += ' ';
+  //     replacementText += ' ';
   //   }
 
-  //   textToInsert += previous.prefix + ''.padEnd(previous.markup.length + previous.markup_space.length);
+  //   replacementText += previous.prefix;
+
+  //   // In the content region, introduce extra leading whitespace equal to the length of the markup.
+  //   // We do not copy over the markup, that would cause splitting of list items to create new list
+  //   // items, we just want the next line to be indented under the current list item.
+  //   // TODO: this is probably wrong, have to be more careful about what gets stored in markup.
+
+  //   replacementText += ''.padEnd(previous.markup.length + previous.markup_space.length);
+
+  //   replacementText += tokenText.trimStart();
   // } else if (previous.index === previous.comment.loc.start.line) {
-  //   textToInsert += previous.text.slice(0, previous.lead_whitespace.length);
-  //   if (previous.prefix.startsWith('*')) {
-  //     // NOTE: unsure about this space
-  //     textToInsert += ' ' + previous.prefix + ''.padEnd(previous.markup.length + previous.markup_space.length);
-  //   }
-  // } else if (previous.index === previous.comment.loc.end.line) {
-  //   textToInsert += previous.text.slice(0, previous.lead_whitespace.length);
-  //   if (previous.prefix.startsWith('*')) {
-  //     textToInsert += previous.prefix + ''.padEnd(previous.markup.length + previous.markup_space.length);
-  //   }
-  // } else {
-  //   textToInsert += previous.text.slice(0, previous.lead_whitespace.length + previous.prefix.length);
-  //   textToInsert += ''.padEnd(previous.markup.length +  previous.markup_space.length, ' ');
-  // }
+  //   // This comment starts on the first line of the block comment, but does not end on the first
+  //   // line of the block comment.
 
-  // return <eslint.Rule.ReportDescriptor>{
-  //   node: previous.context.node,
-  //   loc: {
-  //     start: {
-  //       line: previous.index,
-  //       column: 0
-  //     },
-  //     end: {
-  //       line: previous.index,
-  //       column: previous.text.length
-  //     }
-  //   },
-  //   messageId: 'split',
-  //   data: {
-  //     line_length: `${previous.text.length}`,
-  //     max_length: `${previous.context.max_line_length}`
-  //   },
-  //   fix: function (fixer) {
-  //     return fixer.insertTextAfterRange(insertAfterRange, textToInsert);
+  //   replacementText += previous.lead_whitespace;
+
+  //   // If the character after the comment start is *, then this looks like a javadoc comment. The
+  //   // new line introduced should have one extra leading space in the lead whitespace region.
+
+  //   if (previous.comment.type === 'Block' && previous.prefix.startsWith('*')) {
+  //     replacementText += ' ';
   //   }
-  // };
+
+  //   replacementText += previous.prefix;
+  //   replacementText += ''.padEnd(previous.markup.length + previous.markup_space.length);
+  //   replacementText += tokenText.trimStart();
+  // } else if (previous.index === previous.comment.loc.end.line) {
+  //   // The final line of a block comment.
+
+  //   replacementText += previous.lead_whitespace;
+
+  //   if (previous.prefix.startsWith('*')) {
+  //     replacementText += previous.prefix;
+  //     replacementText += ''.padEnd(previous.markup.length + previous.markup_space.length);
+  //   }
+  //   replacementText += tokenText.trimStart();
+  // } else {
+  //   // An intermediate line in a block comment.
+  //   replacementText += previous.lead_whitespace;
+  //   replacementText += previous.prefix;
+  //   replacementText += ''.padEnd(previous.markup.length +  previous.markup_space.length);
+  //   replacementText += tokenText.trimStart();
+  // }
 }
 
 /**
