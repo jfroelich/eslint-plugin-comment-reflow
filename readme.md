@@ -26,7 +26,7 @@ is split, the new line will also be indented.
 Using `eslint-plugin-comment-reflow` as the plugin name also works.
 
 3. Add the rule to the eslint config:
-```
+```json
 {
   "rules": [
     "comment-reflow/comment-length": [
