@@ -2,8 +2,6 @@ import eslint from 'eslint';
 import { CommentLine, endIndexOf, tokenize } from './util';
 
 export function split(previous: CommentLine, current?: CommentLine) {
-  console.log('analyzing comment line', previous.index, previous.content, previous.suffix, previous.close);
-
   if (current && (previous.index + 1 !== current.index)) {
     return;
   }
@@ -60,30 +58,21 @@ export function split(previous: CommentLine, current?: CommentLine) {
     return;
   }
 
-  // Single out the special case of processing a line that is the final line of of a block comment,
-  // which may also be its first and only line, where the content is under the limit but the closing
-  // comment syntax, with our without leading space, is over the limit. In this case we only need to
-  // wrap the suffix and the close. We do not care nor expect the next line, current, to be set. We
-  // do not need to tokenize the content to find the appropriate break point. There is the unsettled
-  // question of how to break up the whitespace. I think we take the destructive approach here.
-  // Break immediately after the content ends, and ignore the whitespace. We are to replace the
-  // suffix and the close with a new line and the lead whitespace, prefix, and close.
-
-  // TODO: still bugged if running on not first line
+  // Single out the special case of processing a line that is the final line of a block comment,
+  // where the content is under the limit, but the closing comment syntax, with our without the
+  // whitespace between the content and the close, is over the limit.
 
   if (previous.comment.type === 'Block' && previous.index === previous.comment.loc.end.line &&
     endIndexOf(previous, 'content') <= threshold) {
-    console.log('final line of block comment where content under threshold');
-
     let replacementText = '\n' + previous.lead_whitespace;
 
-    if (previous.index !== previous.comment.loc.start.line) {
-      replacementText += previous.prefix + previous.close;
-    } else if (previous.prefix.startsWith('*')) {
-      replacementText += ' ' + previous.close;
-    } else {
-      replacementText += previous.close;
+    // For javadoc comments, append an extra space so that the asterisks are vertically aligned.
+
+    if (previous.index === previous.comment.loc.start.line && previous.prefix.startsWith('*')) {
+      replacementText += ' ';
     }
+
+    replacementText += previous.close;
 
     const rangeStart = previous.context.code.getIndexFromLoc({
       line: previous.index,
