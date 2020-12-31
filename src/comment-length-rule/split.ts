@@ -2,6 +2,8 @@ import eslint from 'eslint';
 import { CommentLine, endIndexOf, tokenize } from './util';
 
 export function split(previous: CommentLine, current?: CommentLine) {
+  console.log('analyzing comment line', previous.index, previous.content, previous.suffix, previous.close);
+
   if (current && (previous.index + 1 !== current.index)) {
     return;
   }
@@ -38,10 +40,14 @@ export function split(previous: CommentLine, current?: CommentLine) {
     return;
   }
 
-  // edge case for content under the limit but trailing whitespace over the limit
+  // Handle a peculiar edge case because of support for authors who do not use no-trailing-spaces.
+  // We have to be considerate of trailing whitespace. It is possible that the content is visibly
+  // under the limit, but the trailing whitespace pushes it over the limit. This only applies when
+  // the whitespace is not visibly part of the content, meaning that this applies to all situations
+  // other than the final line of a block comment.
 
-  if (previous.comment.type === 'Line' && endIndexOf(previous, 'content') <= threshold &&
-    endIndexOf(previous, 'suffix') > threshold) {
+  if ((previous.comment.type === 'Line' || previous.index !== previous.comment.loc.end.line) &&
+    endIndexOf(previous, 'content') <= threshold && endIndexOf(previous, 'suffix') > threshold) {
     return;
   }
 
@@ -54,11 +60,77 @@ export function split(previous: CommentLine, current?: CommentLine) {
     return;
   }
 
-  // Accumulate tokens until the total length of the remaining tokens is less than the threshold, or
-  // until there are no remaining tokens and there is at least one token meaning a hard break.
+  // Single out the special case of processing a line that is the final line of of a block comment,
+  // which may also be its first and only line, where the content is under the limit but the closing
+  // comment syntax, with our without leading space, is over the limit. In this case we only need to
+  // wrap the suffix and the close. We do not care nor expect the next line, current, to be set. We
+  // do not need to tokenize the content to find the appropriate break point. There is the unsettled
+  // question of how to break up the whitespace. I think we take the destructive approach here.
+  // Break immediately after the content ends, and ignore the whitespace. We are to replace the
+  // suffix and the close with a new line and the lead whitespace, prefix, and close.
+
+  // TODO: still bugged if running on not first line
+
+  if (previous.comment.type === 'Block' && previous.index === previous.comment.loc.end.line &&
+    endIndexOf(previous, 'content') <= threshold) {
+    console.log('final line of block comment where content under threshold');
+
+    let replacementText = '\n' + previous.lead_whitespace;
+
+    if (previous.index !== previous.comment.loc.start.line) {
+      replacementText += previous.prefix + previous.close;
+    } else if (previous.prefix.startsWith('*')) {
+      replacementText += ' ' + previous.close;
+    } else {
+      replacementText += previous.close;
+    }
+
+    const rangeStart = previous.context.code.getIndexFromLoc({
+      line: previous.index,
+      column: endIndexOf(previous, 'content')
+    });
+
+    const rangeEnd = previous.context.code.getIndexFromLoc({
+      line: current ? current.index : previous.index,
+      column: previous.comment.loc.end.column
+    });
+
+    const report: eslint.Rule.ReportDescriptor = {
+      node: previous.context.node,
+      loc: {
+        start: {
+          line: previous.index,
+          column: 0
+        },
+        end: {
+          line: previous.index,
+          column: previous.comment.loc.end.column
+        }
+      },
+      messageId: 'split',
+      data: {
+        line_length: `${previous.text.length}`,
+        max_length: `${previous.context.max_line_length}`
+      },
+      fix: function (fixer) {
+        return fixer.replaceTextRange([rangeStart, rangeEnd], replacementText);
+      }
+    };
+
+    return report;
+  }
+
+  // TODO: this is completely broken now for block comments, it is replacing the wrong stuff and
+  // breaking the end of the comment.
+  // TODO: we do not want to tokenize the content and its trailing whitespace unless the suffix
+  // length is over the limit. if it is the final line of a block comment and only the close syntax
+  // is over the limit, we shouldn't be tokenizing anything.
+
+  let rangeStartColumn: number;
+  let rangeEndColumn: number;
 
   const tokens = tokenize(previous.content);
-  let remaining = endIndexOf(previous, 'close');
+  let remaining = endIndexOf(previous, 'suffix');
   let tokenSplitIndex = -1;
 
   for (let i = tokens.length - 1; i > -1; i--) {
@@ -99,8 +171,8 @@ export function split(previous: CommentLine, current?: CommentLine) {
   let tokenText;
 
   if (tokenSplitIndex === -1 || remaining > threshold) {
-    console.log('hard break');
     // if we were unable to split nicely, then we want to hard break
+    // TODO: i dont think this works, this ends up including close
     tokenText = previous.text.slice(threshold);
   } else {
     const excessTokens = tokens.slice(tokenSplitIndex);
@@ -113,11 +185,7 @@ export function split(previous: CommentLine, current?: CommentLine) {
     replacementText += previous.lead_whitespace;
     replacementText += previous.open;
     replacementText += previous.prefix;
-
-    // TEMP: do not trim for a moment, examining tokens
-    // replacementText += tokenText.trimStart();
-
-    replacementText += tokenText;
+    replacementText += tokenText.trimStart();
   } else if (previous.index === previous.comment.loc.start.line &&
     previous.index === previous.comment.loc.end.line) {
     // This is a one line block comment. We have to be careful about the open/close regions.
@@ -188,29 +256,39 @@ export function split(previous: CommentLine, current?: CommentLine) {
   // occur, where 0 is the first position of the previous line. This is not the position in the
   // entire file.
 
-  let rangeStartColumn: number;
   if (tokenSplitIndex === -1) {
     // when not finding a split, we are doing a hard break at the threshold
     rangeStartColumn = threshold;
   } else {
     // if we found a split, then we are breaking at the point before the first token being moved
     // to the next line
+
+    // TODO: add +1 ? is this off? something is wrong possibly here
+
     rangeStartColumn = previous.text.length - tokenText.length;
+    console.log('found a split, so range start column is', rangeStartColumn);
   }
-
-  console.log('replacement range start column:', rangeStartColumn);
-
-  // TODO: this is wrong, this should not be threshold, this should be the break position if found
-  // and then fallback to the threshold
 
   const rangeStart = previous.context.code.getIndexFromLoc({
     line: previous.index,
     column: rangeStartColumn
   });
 
+  if (current) {
+    // we are replacing into the next line, just after the prefix
+    rangeEndColumn = endIndexOf(current, 'prefix');
+  } else {
+    // we are replacing part of the previous line only
+    // in this case, there is is no next line. so we do not want to replace past the end of the
+    // current line's suffix.
+    rangeEndColumn = endIndexOf(previous, 'suffix');
+  }
+
+  console.log('range end column:', rangeEndColumn);
+
   const rangeEnd = previous.context.code.getIndexFromLoc({
     line: current ? current.index : previous.index,
-    column: current ? endIndexOf(current, 'prefix') : previous.text.length
+    column: rangeEndColumn
   });
 
   const report: eslint.Rule.ReportDescriptor = {
