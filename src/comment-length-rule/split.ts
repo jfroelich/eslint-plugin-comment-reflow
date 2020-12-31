@@ -123,19 +123,7 @@ export function split(current: CommentLine, next?: CommentLine) {
 
     const tokens = tokenize(current.content);
     const tokenSplitIndex = findTokenSplit(current, tokens);
-
-    // Determine the splitting position in the content. If the token index points to a whitespace
-    // token, move the position to after the token. The whitespace token will remain on the current
-    // line as its suffix. This position is relative to the start of the content.
-
-    let contentBreakpoint: number;
-    if (tokenSplitIndex === -1) {
-      contentBreakpoint = threshold - endIndexOf(current, 'prefix');
-    } else if (tokens[tokenSplitIndex].trim().length === 0) {
-      contentBreakpoint = tokens.slice(0, tokenSplitIndex + 1).join('').length;
-    } else {
-      contentBreakpoint = tokens.slice(0, tokenSplitIndex).join('').length;
-    }
+    const contentBreakpoint = findContentBreak(current, tokens, tokenSplitIndex);
 
     // Determine where to break the line.
 
@@ -277,6 +265,24 @@ function findTokenSplit(current: CommentLine, tokens: string[]) {
   }
 
   return tokenSplitIndex;
+}
+
+/**
+ * Determine the splitting position in the content. If the token index points to a whitespace token,
+ * move the position to after the token. The whitespace token will remain on the current line as its
+ * suffix. This position is relative to the start of the content.
+ */
+function findContentBreak(current: CommentLine, tokens: string[], tokenSplitIndex: number) {
+  let contentBreakpoint: number;
+  if (tokenSplitIndex === -1) {
+    contentBreakpoint = current.context.max_line_length - endIndexOf(current, 'prefix');
+  } else if (tokens[tokenSplitIndex].trim().length === 0) {
+    contentBreakpoint = tokens.slice(0, tokenSplitIndex + 1).join('').length;
+  } else {
+    contentBreakpoint = tokens.slice(0, tokenSplitIndex).join('').length;
+  }
+
+  return contentBreakpoint;
 }
 
 /**
