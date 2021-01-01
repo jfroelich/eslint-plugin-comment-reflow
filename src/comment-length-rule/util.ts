@@ -446,3 +446,21 @@ export function isLeadWhitespaceAligned(current: CommentLine, next?: CommentLine
 
   return current.lead_whitespace.length === next.lead_whitespace.length;
 }
+
+export function getLinebreakStyle(ruleContext: eslint.Rule.RuleContext) {
+  const text = ruleContext.getSourceCode().getText();
+  if (!text) {
+    return '\n';
+  }
+
+  // TODO: figure out how to grab this from eslint utils, could not figure it out quickly.
+  // This pattern is copy/pasted right out of eslint. Ideally I would just access it somehow.
+
+  const lineBreakPattern = /\r\n|[\r\n\u2028\u2029]/u;
+  const matches = lineBreakPattern.exec(text);
+  if (!matches) {
+    return '\n';
+  }
+
+  return matches[0];
+}
