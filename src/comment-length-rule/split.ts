@@ -116,91 +116,86 @@ export function split(current: CommentLine, next?: CommentLine) {
     return report;
   }
 
-  // Handle line comments
+  const tokens = tokenize(current.content);
+  const tokenSplitIndex = findTokenSplit(current, tokens);
+  const contentBreakpoint = findContentBreak(current, tokens, tokenSplitIndex);
+  const lineBreakpoint = findLineBreak(current, tokenSplitIndex, contentBreakpoint);
+  const replacementText = composeReplacementText(current, contentBreakpoint, next);
+  const loc = createLoc(current, next);
+  const range = createReplacementRange(current, lineBreakpoint, next);
 
-  if (current.comment.type === 'Line') {
-    assert(endIndexOf(current, 'content') > threshold, 'content under threshold');
-
-    const tokens = tokenize(current.content);
-    const tokenSplitIndex = findTokenSplit(current, tokens);
-    const contentBreakpoint = findContentBreak(current, tokens, tokenSplitIndex);
-    const lineBreakpoint = findLineBreak(current, tokenSplitIndex, contentBreakpoint);
-
-    // Compose the replacement text. Since we are moving text into the next line, which might have
-    // content, conditionally add in an extra space to ensure the moved text is not immediately
-    // adjacent.
-
-    let replacementText = '\n';
-    replacementText += current.lead_whitespace;
-    replacementText += current.open;
-    replacementText += current.prefix;
-    replacementText += current.content.slice(contentBreakpoint);
-    if (next && next.content) {
-      replacementText += ' ';
+  const report: eslint.Rule.ReportDescriptor = {
+    node: current.context.node,
+    loc,
+    messageId: 'split',
+    data: {
+      line_length: `${current.text.length}`,
+      max_length: `${current.context.max_line_length}`
+    },
+    fix: function (fixer) {
+      return fixer.replaceTextRange(range, replacementText);
     }
+  };
 
-    // Determime the region of text that is being replaced. Start at the place where we want to
-    // insert a new line break.
+  return report;
+}
 
-    const rangeStart = current.context.code.getIndexFromLoc({
-      line: current.index,
-      column: lineBreakpoint
-    });
-
-    // Determine the end position of the text that is being replaced. If there is a next line,
-    // then the end position is just after the next line's prefix. If there is no next line,
-    // then the end position is the end of the current line. If there is a next line, we also
-    // need to inspect whether it is empty. If the next line has content, then we replace into
-    // it. If the next line has no content, it is an intentionally empty line, so we do not
-    // replace into it, and pretend it does not exist, and insert, and in this manner, we preserve
-    // the empty line and preserve author intent.
-
-    let rangeEndLine: number;
-    let rangeEndColumn: number;
-    let endLocPosition: estree.Position;
-
-    if (next && next.content) {
-      rangeEndLine = next.index;
-      rangeEndColumn = endIndexOf(next, 'prefix');
-      endLocPosition = {
-        line: next.index,
-        column: next.comment.loc.end.column
-      };
-    } else {
-      rangeEndLine = current.index;
-      rangeEndColumn = endIndexOf(current, 'suffix');
-      endLocPosition = {
-        line: current.index,
-        column: current.text.length
-      };
-    }
-
-    const rangeEnd = current.context.code.getIndexFromLoc({
-      line: rangeEndLine,
-      column: rangeEndColumn
-    });
-
-    const report: eslint.Rule.ReportDescriptor = {
-      node: current.context.node,
-      loc: {
-        start: {
-          line: current.index,
-          column: 0
-        },
-        end: endLocPosition
-      },
-      messageId: 'split',
-      data: {
-        line_length: `${current.text.length}`,
-        max_length: `${current.context.max_line_length}`
-      },
-      fix: function (fixer) {
-        return fixer.replaceTextRange([rangeStart, rangeEnd], replacementText);
-      }
+function createLoc(current: CommentLine, next: CommentLine) {
+  let endLocPosition: estree.Position;
+  if (next && next.content) {
+    endLocPosition = {
+      line: next.index,
+      column: next.comment.loc.end.column
     };
-
-    return report;
+  } else {
+    endLocPosition = {
+      line: current.index,
+      column: current.text.length
+    };
   }
+
+  return {
+    start: {
+      line: current.index,
+      column: 0
+    },
+    end: endLocPosition
+  };
+}
+
+function createReplacementRange(current: CommentLine, lineBreakpoint: number, next?: CommentLine) {
+  // Determime the region of text that is being replaced. Start at the place where we want to
+  // insert a new line break.
+
+  const rangeStart = current.context.code.getIndexFromLoc({
+    line: current.index,
+    column: lineBreakpoint
+  });
+
+  // Determine the end position of the text that is being replaced. If there is a next line,
+  // then the end position is just after the next line's prefix. If there is no next line,
+  // then the end position is the end of the current line. If there is a next line, we also
+  // need to inspect whether it is empty. If the next line has content, then we replace into
+  // it. If the next line has no content, it is an intentionally empty line, so we do not
+  // replace into it, and pretend it does not exist, and insert, and in this manner, we preserve
+  // the empty line and preserve author intent.
+
+  let rangeEndLine: number;
+  let rangeEndColumn: number;
+  if (next && next.content) {
+    rangeEndLine = next.index;
+    rangeEndColumn = endIndexOf(next, 'prefix');
+  } else {
+    rangeEndLine = current.index;
+    rangeEndColumn = endIndexOf(current, 'suffix');
+  }
+
+  const rangeEnd = current.context.code.getIndexFromLoc({
+    line: rangeEndLine,
+    column: rangeEndColumn
+  });
+
+  return <eslint.AST.Range>[rangeStart, rangeEnd];
 }
 
 function findTokenSplit(current: CommentLine, tokens: string[]) {
@@ -289,6 +284,27 @@ function findLineBreak(current: CommentLine, tokenSplitIndex: number, contentBre
   }
 
   return lineBreakpoint;
+}
+
+/**
+ * Compose the replacement text. Since we are moving text into the next line, which might have
+ * content, conditionally add in an extra space to ensure the moved text is not immediately
+ * adjacent.
+ */
+function composeReplacementText(current: CommentLine, contentBreakpoint: number,
+  next?: CommentLine) {
+  // NOTE: this is only implement for line comments right now.
+
+  let replacementText = '\n';
+  replacementText += current.lead_whitespace;
+  replacementText += current.open;
+  replacementText += current.prefix;
+  replacementText += current.content.slice(contentBreakpoint);
+  if (next && next.content) {
+    replacementText += ' ';
+  }
+
+  return replacementText;
 }
 
 /**
