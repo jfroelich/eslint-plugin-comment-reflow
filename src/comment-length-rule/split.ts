@@ -64,7 +64,6 @@ export function split(current: CommentLine, next?: CommentLine) {
   const tokenSplitIndex = findTokenSplit(current, tokens);
   const contentBreakpoint = findContentBreak(current, tokens, tokenSplitIndex);
   const lineBreakpoint = findLineBreak(current, tokenSplitIndex, contentBreakpoint);
-  console.log('line break point:', lineBreakpoint);
   const replacementText = composeReplacementText(current, contentBreakpoint, next);
   console.log('replacement text: "%s"', replacementText.replace(/\n/, '\\n'));
   const loc = createLoc(current, next);
@@ -287,33 +286,37 @@ function findLineBreak(current: CommentLine, tokenSplitIndex: number, contentBre
   return lineBreakpoint;
 }
 
-/**
- * Compose the replacement text. Since we are moving text into the next line, which might have
- * content, conditionally add in an extra space to ensure the moved text is not immediately
- * adjacent.
- */
 function composeReplacementText(current: CommentLine, contentBreakpoint: number,
   next?: CommentLine) {
   let replacementText = '\n' + current.lead_whitespace;
-
-  // Special case for last line of block comment where content under limit but suffix over limit
-  if (current.comment.type === 'Block' && current.index === current.comment.loc.end.line &&
-    endIndexOf(current, 'content') <= current.context.max_line_length) {
-
-    // vertically align javadoc manually using a space since we are not using prefix
-    if (current.index === current.comment.loc.start.line && current.prefix.startsWith('*')) {
-      replacementText += ' ';
-    }
-
-    return replacementText;
-  }
 
   if (current.comment.type === 'Line') {
     replacementText += current.open;
   }
 
+  // Vertically align the asterisk in the new line when splitting first line of javadoc since the
+  // lead whitespace by itself is not enough, all lines for proper javadoc other than the first have
+  // an extra leading space.
+
+  if (current.index === current.comment.loc.start.line && current.prefix.startsWith('*')) {
+    replacementText += ' ';
+  }
+
+  // Special case for last line of block comment where content under limit but suffix/close over
+  // limit
+
+  if (current.comment.type === 'Block' && current.index === current.comment.loc.end.line &&
+    endIndexOf(current, 'content') <= current.context.max_line_length) {
+    return replacementText;
+  }
+
   replacementText += current.prefix;
   replacementText += current.content.slice(contentBreakpoint);
+
+  replacementText += current.suffix;
+
+  // Since we are moving text into the next line, which might have content, conditionally add in an
+  // extra space to ensure the moved text is not immediately adjacent.
 
   if (next && next.content) {
     replacementText += ' ';
