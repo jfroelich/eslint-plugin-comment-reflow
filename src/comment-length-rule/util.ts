@@ -419,8 +419,12 @@ export function tokenize(string: string) {
   return tokens;
 }
 
-export function isLeadWhitespaceAligned(current: CommentLine, next: CommentLine) {
-  return next && next.content && ((next.lead_whitespace.length === current.lead_whitespace.length) ||
+export function isLeadWhitespaceAligned(current: CommentLine, next?: CommentLine) {
+  if (!next) {
+    return true;
+  }
+
+  return ((next.lead_whitespace.length === current.lead_whitespace.length) ||
     (current.comment.type === 'Block' && current.index === current.comment.loc.start.line &&
     next.lead_whitespace.length - current.lead_whitespace.length === 1));
 }

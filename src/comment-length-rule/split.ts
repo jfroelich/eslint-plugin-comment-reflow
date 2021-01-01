@@ -106,7 +106,7 @@ function createLoc(current: CommentLine, next: CommentLine) {
   // line and will only be creating a new one.
 
   let endLocPosition: estree.Position;
-  if (isLeadWhitespaceAligned(current, next)) {
+  if (isLeadWhitespaceAligned(current, next) && next && next.content) {
     endLocPosition = {
       line: next.index,
       column: next.comment.loc.end.column
@@ -165,7 +165,7 @@ function createReplacementRange(current: CommentLine, lineBreakpoint: number, ne
   let rangeEndLine: number;
   let rangeEndColumn: number;
 
-  if (isLeadWhitespaceAligned(current, next)) {
+  if (isLeadWhitespaceAligned(current, next) && next && next.content) {
     rangeEndLine = next.index;
     rangeEndColumn = endIndexOf(next, 'prefix');
   } else {
@@ -319,7 +319,7 @@ function composeReplacementText(current: CommentLine, contentBreakpoint: number,
 
   replacementText += current.suffix;
 
-  if (isLeadWhitespaceAligned(current, next)) {
+  if (isLeadWhitespaceAligned(current, next) && next && next.content) {
     // Keep the text moved from the current line into the next line separated from the existing text
     // of the next line.
     replacementText += ' ';
