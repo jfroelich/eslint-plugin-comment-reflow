@@ -292,7 +292,7 @@ function findLineBreak(current: CommentLine, tokenSplitIndex: number, contentBre
 
 function composeReplacementText(current: CommentLine, contentBreakpoint: number,
   next?: CommentLine) {
-  let replacementText = '\n' + current.lead_whitespace;
+  let replacementText = current.context.line_break + current.lead_whitespace;
 
   if (current.comment.type === 'Line') {
     replacementText += current.open;

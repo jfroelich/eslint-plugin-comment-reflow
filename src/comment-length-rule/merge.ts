@@ -112,7 +112,7 @@ export function merge(previous: CommentLine, current: CommentLine) {
 
   if (tokenText.length < current.content.length) {
     const open = current.comment.type === 'Block' ? '' : '//';
-    replacementText += '\n' + current.lead_whitespace + open + current.prefix;
+    replacementText += current.context.line_break + current.lead_whitespace + open + current.prefix;
   }
 
   // Merging the tokens may result in either a whitespace token ending the previous line or starting
