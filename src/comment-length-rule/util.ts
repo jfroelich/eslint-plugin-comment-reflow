@@ -420,11 +420,29 @@ export function tokenize(string: string) {
 }
 
 export function isLeadWhitespaceAligned(current: CommentLine, next?: CommentLine) {
+  // When there is no next line, there is no misalignment concern, so report aligned.
   if (!next) {
     return true;
   }
 
-  return ((next.lead_whitespace.length === current.lead_whitespace.length) ||
-    (current.comment.type === 'Block' && current.index === current.comment.loc.start.line &&
-    next.lead_whitespace.length - current.lead_whitespace.length === 1));
+  // If the line's prefix starts with an asterisk then assume it is javadoc. For the first line of a
+  // javadoc comment, the lines are only aligned if the asterisks are vertically aligned. The first
+  // asterisk of the second line should be underneath the second asterisk of the first line. This
+  // means there should be one extra space in the second line. for other lines of a javadoc comment,
+  // fall through to requiring exact equality. In the non-javadoc case, everything is always aligned
+  // because lead whitespace is a part of the content and not treated as lead whitespace.
+
+  if (current.comment.type === 'Block') {
+    if (current.prefix.startsWith('*')) {
+      if (current.index === current.comment.loc.start.line) {
+        return next.lead_whitespace.length - current.lead_whitespace.length === 1;
+      } else {
+        // FALL THROUGH
+      }
+    } else {
+      return true;
+    }
+  }
+
+  return current.lead_whitespace.length === next.lead_whitespace.length;
 }

@@ -1,5 +1,5 @@
 import eslint from 'eslint';
-import { CommentLine, endIndexOf, tokenize } from './util';
+import { CommentLine, endIndexOf, isLeadWhitespaceAligned, tokenize } from './util';
 
 export function merge(previous: CommentLine, current: CommentLine) {
   if (!previous) {
@@ -22,8 +22,7 @@ export function merge(previous: CommentLine, current: CommentLine) {
     return;
   }
 
-  if (previous.comment.type === 'Line' && previous.lead_whitespace.length !==
-    current.lead_whitespace.length) {
+  if (!isLeadWhitespaceAligned(previous, current)) {
     return;
   }
 
