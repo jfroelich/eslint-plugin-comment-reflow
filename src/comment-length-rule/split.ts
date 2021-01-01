@@ -65,7 +65,7 @@ export function split(current: CommentLine, next?: CommentLine) {
   const contentBreakpoint = findContentBreak(current, tokens, tokenSplitIndex);
   const lineBreakpoint = findLineBreak(current, tokenSplitIndex, contentBreakpoint);
   const replacementText = composeReplacementText(current, contentBreakpoint, next);
-  console.log('replacement text: "%s"', replacementText.replace(/\n/, '\\n'));
+
   const loc = createLoc(current, next);
   const range = createReplacementRange(current, lineBreakpoint, next);
 
