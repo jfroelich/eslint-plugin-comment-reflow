@@ -64,7 +64,9 @@ export function split(current: CommentLine, next?: CommentLine) {
   const tokenSplitIndex = findTokenSplit(current, tokens);
   const contentBreakpoint = findContentBreak(current, tokens, tokenSplitIndex);
   const lineBreakpoint = findLineBreak(current, tokenSplitIndex, contentBreakpoint);
+  console.log('line break point:', lineBreakpoint);
   const replacementText = composeReplacementText(current, contentBreakpoint, next);
+  console.log('replacement text: "%s"', replacementText.replace(/\n/, '\\n'));
   const loc = createLoc(current, next);
   const range = createReplacementRange(current, lineBreakpoint, next);
 
@@ -177,6 +179,8 @@ function createReplacementRange(current: CommentLine, lineBreakpoint: number, ne
 }
 
 function findTokenSplit(current: CommentLine, tokens: string[]) {
+  const endOfPrefix = endIndexOf(current, 'prefix');
+
   let remaining = endIndexOf(current, 'content');
   let tokenSplitIndex = -1;
 
@@ -200,7 +204,7 @@ function findTokenSplit(current: CommentLine, tokens: string[]) {
     // here because we know there is no longer a point in looking at earlier tokens and that there
     // are no other tokens so we want to avoid checking other things.
 
-    if (remaining - token.length === endIndexOf(current, 'prefix')) {
+    if (remaining - token.length === endOfPrefix) {
       // we reset the index. if we ran into a big token at the start, it means we are going to
       // have to hard break the token itself, and since later code relies on this, we want to
       // ensure we report not found.
@@ -232,7 +236,7 @@ function findTokenSplit(current: CommentLine, tokens: string[]) {
   // Account for soft break preceding hyphenated word.
 
   if (tokenSplitIndex > 0 && tokens[tokenSplitIndex] === '-' &&
-    remaining - tokens[tokenSplitIndex - 1].length > endIndexOf(current, 'prefix')) {
+    remaining - tokens[tokenSplitIndex - 1].length > endOfPrefix) {
     tokenSplitIndex--;
   }
 
@@ -290,14 +294,13 @@ function findLineBreak(current: CommentLine, tokenSplitIndex: number, contentBre
  */
 function composeReplacementText(current: CommentLine, contentBreakpoint: number,
   next?: CommentLine) {
-  let replacementText = '\n';
+  let replacementText = '\n' + current.lead_whitespace;
 
   // Special case for last line of block comment where content under limit but suffix over limit
   if (current.comment.type === 'Block' && current.index === current.comment.loc.end.line &&
     endIndexOf(current, 'content') <= current.context.max_line_length) {
-    replacementText += current.lead_whitespace;
 
-    // vertically align javadoc
+    // vertically align javadoc manually using a space since we are not using prefix
     if (current.index === current.comment.loc.start.line && current.prefix.startsWith('*')) {
       replacementText += ' ';
     }
@@ -305,11 +308,13 @@ function composeReplacementText(current: CommentLine, contentBreakpoint: number,
     return replacementText;
   }
 
-  // Line
-  replacementText += current.lead_whitespace;
-  replacementText += current.open;
+  if (current.comment.type === 'Line') {
+    replacementText += current.open;
+  }
+
   replacementText += current.prefix;
   replacementText += current.content.slice(contentBreakpoint);
+
   if (next && next.content) {
     replacementText += ' ';
   }
