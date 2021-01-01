@@ -1,4 +1,6 @@
 import eslint from 'eslint';
+// @ts-expect-error eslint does not type this since not exposed
+import astutil from 'eslint/lib/rules/utils/ast-utils';
 import estree from 'estree';
 
 export interface CommentContext {
@@ -459,13 +461,8 @@ export function sniffLineBreakStyle(context: eslint.Rule.RuleContext) {
     return '\n';
   }
 
-  // TODO: figure out how to grab this from eslint utils, could not figure it out quickly.
-  // This pattern is copy/pasted right out of eslint. Ideally I would just access it somehow.
-  // The approach to determining what line break is in use was adapated from the source code of the
-  // linebreak-style rule.
-
-  const lineBreakPattern = /\r\n|[\r\n\u2028\u2029]/u;
-  const matches = lineBreakPattern.exec(text);
+  const { LINEBREAK_MATCHER } = <{ LINEBREAK_MATCHER: RegExp; }>astutil;
+  const matches = LINEBREAK_MATCHER.exec(text);
   if (!matches) {
     return '\n';
   }
