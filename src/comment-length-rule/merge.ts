@@ -22,6 +22,11 @@ export function merge(previous: CommentLine, current: CommentLine) {
     return;
   }
 
+  if (previous.comment.type === 'Line' && previous.lead_whitespace.length !==
+    current.lead_whitespace.length) {
+    return;
+  }
+
   if (previous.lead_whitespace.length === current.lead_whitespace.length &&
     previous.prefix.length !== current.prefix.length) {
     if (previous.markup) {
