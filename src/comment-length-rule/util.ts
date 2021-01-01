@@ -4,6 +4,7 @@ import estree from 'estree';
 export interface CommentContext {
   node: estree.Node;
   code: eslint.SourceCode;
+  line_break: string;
   max_line_length: number;
   in_md_fence?: boolean;
   in_jsdoc_example?: boolean;
@@ -447,14 +448,21 @@ export function isLeadWhitespaceAligned(current: CommentLine, next?: CommentLine
   return current.lead_whitespace.length === next.lead_whitespace.length;
 }
 
-export function getLinebreakStyle(ruleContext: eslint.Rule.RuleContext) {
-  const text = ruleContext.getSourceCode().getText();
+/**
+ * Determines the type of line break in use in the source code. Returns a string containing the
+ * line break characters such as "\n" or "\r\n". Defaults to "\n".
+ */
+export function sniffLineBreakStyle(context: eslint.Rule.RuleContext) {
+  const text = context.getSourceCode().getText();
+
   if (!text) {
     return '\n';
   }
 
   // TODO: figure out how to grab this from eslint utils, could not figure it out quickly.
   // This pattern is copy/pasted right out of eslint. Ideally I would just access it somehow.
+  // The approach to determining what line break is in use was adapated from the source code of the
+  // linebreak-style rule.
 
   const lineBreakPattern = /\r\n|[\r\n\u2028\u2029]/u;
   const matches = lineBreakPattern.exec(text);

@@ -3,7 +3,7 @@ import eslint from 'eslint';
 import estree from 'estree';
 import { merge } from './merge';
 import { split } from './split';
-import { CommentContext, CommentLine, parseLine } from './util';
+import { CommentContext, CommentLine, parseLine, sniffLineBreakStyle } from './util';
 
 export const commentLengthRule: eslint.Rule.RuleModule = {
   meta: {
@@ -38,10 +38,13 @@ function analyzeProgram(ruleContext: eslint.Rule.RuleContext, node: estree.Node)
   let previousLine: CommentLine;
   let finalLineCommentLine: CommentLine;
 
+  const lineBreakStyle = sniffLineBreakStyle(ruleContext);
+
   for (const comment of comments) {
     const context: CommentContext = {
       node,
       code,
+      line_break: lineBreakStyle,
       max_line_length: maxLineLength,
       in_md_fence: false,
       in_jsdoc_example: false
