@@ -59,63 +59,6 @@ export function split(current: CommentLine, next?: CommentLine) {
     return;
   }
 
-  // TODO: I want to eventually use one approach for all of the scenarios. However, each scenario
-  // has idiosyncratic concerns, causing complexity. For now, I am going to solve the scenarios one
-  // at a time, get a minimally working example, and then hunt for commonality.
-
-  // Single out the special case of processing a line that is the final line of a block comment,
-  // where the content is under the limit, but the closing comment syntax, with or without the
-  // whitespace between the content and the close, is over the limit. In this scenario, there is no
-  // need to tokenize the content in order to determine where to split, and there is no need to
-  // consider the next line of the comment or the next comment.
-
-  if (current.comment.type === 'Block' && current.index === current.comment.loc.end.line &&
-    endIndexOf(current, 'content') <= threshold) {
-    let replacementText = '\n' + current.lead_whitespace;
-
-    // For javadoc comments, append an extra space so that the asterisks are vertically aligned.
-
-    if (current.index === current.comment.loc.start.line && current.prefix.startsWith('*')) {
-      replacementText += ' ';
-    }
-
-    const rangeStart = current.context.code.getIndexFromLoc({
-      line: current.index,
-      column: endIndexOf(current, 'content')
-    });
-
-    const rangeEnd = current.context.code.getIndexFromLoc({
-      line: next ? next.index : current.index,
-      // subtract 2 for the close syntax
-      // TODO: i think i would prefer to use endIndexOf(current, 'suffix') here for consistency?
-      column: current.comment.loc.end.column - current.close.length
-    });
-
-    const report: eslint.Rule.ReportDescriptor = {
-      node: current.context.node,
-      loc: {
-        start: {
-          line: current.index,
-          column: 0
-        },
-        end: {
-          line: current.index,
-          column: current.comment.loc.end.column
-        }
-      },
-      messageId: 'split',
-      data: {
-        line_length: `${current.text.length}`,
-        max_length: `${current.context.max_line_length}`
-      },
-      fix: function (fixer) {
-        return fixer.replaceTextRange([rangeStart, rangeEnd], replacementText);
-      }
-    };
-
-    return report;
-  }
-
   const tokens = tokenize(current.content);
   const tokenSplitIndex = findTokenSplit(current, tokens);
   const contentBreakpoint = findContentBreak(current, tokens, tokenSplitIndex);
@@ -141,6 +84,22 @@ export function split(current: CommentLine, next?: CommentLine) {
 }
 
 function createLoc(current: CommentLine, next: CommentLine) {
+  // special case for last line of block comment with content under limit and suffix over limit
+  if (current.comment.type === 'Block' && current.index === current.comment.loc.end.line &&
+    endIndexOf(current, 'content') <= current.context.max_line_length) {
+
+    return <eslint.AST.SourceLocation>{
+      start: {
+        line: current.index,
+        column: 0
+      },
+      end: {
+        line: current.index,
+        column: current.comment.loc.end.column
+      }
+    };
+  }
+
   let endLocPosition: estree.Position;
   if (next && next.content) {
     endLocPosition = {
@@ -154,7 +113,7 @@ function createLoc(current: CommentLine, next: CommentLine) {
     };
   }
 
-  return {
+  return <eslint.AST.SourceLocation>{
     start: {
       line: current.index,
       column: 0
@@ -164,6 +123,24 @@ function createLoc(current: CommentLine, next: CommentLine) {
 }
 
 function createReplacementRange(current: CommentLine, lineBreakpoint: number, next?: CommentLine) {
+  // Special case for last line of block comment with content under limit and suffix over limit
+  if (current.comment.type === 'Block' && current.index === current.comment.loc.end.line &&
+    endIndexOf(current, 'content') <= current.context.max_line_length) {
+    const rangeStart = current.context.code.getIndexFromLoc({
+      line: current.index,
+      column: endIndexOf(current, 'content')
+    });
+
+    // TODO: i think i would prefer to use endIndexOf(current, 'suffix') here for consistency?
+
+    const rangeEnd = current.context.code.getIndexFromLoc({
+      line: next ? next.index : current.index,
+      // subtract 2 for the close syntax
+      column: current.comment.loc.end.column - current.close.length
+    });
+    return <eslint.AST.Range>[rangeStart, rangeEnd];
+  }
+
   // Determime the region of text that is being replaced. Start at the place where we want to
   // insert a new line break.
 
@@ -201,6 +178,13 @@ function createReplacementRange(current: CommentLine, lineBreakpoint: number, ne
 function findTokenSplit(current: CommentLine, tokens: string[]) {
   let remaining = endIndexOf(current, 'content');
   let tokenSplitIndex = -1;
+
+  // Edge case for trailing whitespace in last line of block comment.
+
+  if (current.comment.type === 'Block' && current.index === current.comment.loc.end.line &&
+    remaining <= current.context.max_line_length) {
+    return - 1;
+  }
 
   for (let i = tokens.length - 1; i > -1; i--) {
     const token = tokens[i];
@@ -260,6 +244,12 @@ function findTokenSplit(current: CommentLine, tokens: string[]) {
  * suffix. This position is relative to the start of the content.
  */
 function findContentBreak(current: CommentLine, tokens: string[], tokenSplitIndex: number) {
+  // edge case for last line of block comment
+  if (current.comment.type === 'Block' && current.index === current.comment.loc.end.line &&
+    endIndexOf(current, 'content') <= current.context.max_line_length) {
+    return -1;
+  }
+
   let contentBreakpoint: number;
   if (tokenSplitIndex === -1) {
     contentBreakpoint = current.context.max_line_length - endIndexOf(current, 'prefix');
@@ -273,6 +263,12 @@ function findContentBreak(current: CommentLine, tokens: string[], tokenSplitInde
 }
 
 function findLineBreak(current: CommentLine, tokenSplitIndex: number, contentBreakpoint: number) {
+  // edge case for last line of block where content under limit but suffix over limit
+  if (current.comment.type === 'Block' && current.index === current.comment.loc.end.line &&
+    endIndexOf(current, 'content') <= current.context.max_line_length) {
+    return -1;
+  }
+
   let lineBreakpoint: number;
 
   // Determine where to break the line.
@@ -293,9 +289,22 @@ function findLineBreak(current: CommentLine, tokenSplitIndex: number, contentBre
  */
 function composeReplacementText(current: CommentLine, contentBreakpoint: number,
   next?: CommentLine) {
-  // NOTE: this is only implement for line comments right now.
-
   let replacementText = '\n';
+
+  // Special case for last line of block comment where content under limit but suffix over limit
+  if (current.comment.type === 'Block' && current.index === current.comment.loc.end.line &&
+    endIndexOf(current, 'content') <= current.context.max_line_length) {
+    replacementText += current.lead_whitespace;
+
+    // vertically align javadoc
+    if (current.index === current.comment.loc.start.line && current.prefix.startsWith('*')) {
+      replacementText += ' ';
+    }
+
+    return replacementText;
+  }
+
+  // Line
   replacementText += current.lead_whitespace;
   replacementText += current.open;
   replacementText += current.prefix;
