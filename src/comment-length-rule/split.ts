@@ -1,7 +1,7 @@
 import assert from 'assert';
 import eslint from 'eslint';
 import estree from 'estree';
-import { CommentLine, endIndexOf, tokenize } from './util';
+import { CommentLine, endIndexOf, isLeadWhitespaceAligned, tokenize } from './util';
 
 export function split(current: CommentLine, next?: CommentLine) {
   if (next) {
@@ -106,7 +106,7 @@ function createLoc(current: CommentLine, next: CommentLine) {
   // line and will only be creating a new one.
 
   let endLocPosition: estree.Position;
-  if (isNextLineMerge(current, next)) {
+  if (isLeadWhitespaceAligned(current, next)) {
     endLocPosition = {
       line: next.index,
       column: next.comment.loc.end.column
@@ -165,7 +165,7 @@ function createReplacementRange(current: CommentLine, lineBreakpoint: number, ne
   let rangeEndLine: number;
   let rangeEndColumn: number;
 
-  if (isNextLineMerge(current, next)) {
+  if (isLeadWhitespaceAligned(current, next)) {
     rangeEndLine = next.index;
     rangeEndColumn = endIndexOf(next, 'prefix');
   } else {
@@ -319,19 +319,13 @@ function composeReplacementText(current: CommentLine, contentBreakpoint: number,
 
   replacementText += current.suffix;
 
-  if (isNextLineMerge(current, next)) {
+  if (isLeadWhitespaceAligned(current, next)) {
     // Keep the text moved from the current line into the next line separated from the existing text
     // of the next line.
     replacementText += ' ';
   }
 
   return replacementText;
-}
-
-function isNextLineMerge(current: CommentLine, next: CommentLine) {
-  return next && next.content && ((next.lead_whitespace.length === current.lead_whitespace.length) ||
-    (current.comment.type === 'Block' && current.index === current.comment.loc.start.line &&
-    next.lead_whitespace.length - current.lead_whitespace.length === 1));
 }
 
 /**
