@@ -89,7 +89,7 @@ function analyzeProgram(ruleContext: eslint.Rule.RuleContext, node: estree.Node)
     } else if (comment.type === 'Line') {
       const currentLine = parseLine(context, comment, comment.loc.start.line);
 
-      if (previousLine)  {
+      if (previousLine) {
         const report = split(previousLine,
           previousLine.index + 1 === currentLine.index ? currentLine : null);
         if (report) {

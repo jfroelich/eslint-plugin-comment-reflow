@@ -114,36 +114,36 @@ type Region = keyof Pick<CommentLine,
  */
 export function endIndexOf(line: CommentLine, region: Region) {
   switch (region) {
-    case 'lead_whitespace': {
-      return line.lead_whitespace.length;
-    }
+  case 'lead_whitespace': {
+    return line.lead_whitespace.length;
+  }
 
-    case 'open': {
-      return line.lead_whitespace.length + line.open.length;
-    }
+  case 'open': {
+    return line.lead_whitespace.length + line.open.length;
+  }
 
-    case 'prefix': {
-      return line.lead_whitespace.length + line.open.length + line.prefix.length;
-    }
+  case 'prefix': {
+    return line.lead_whitespace.length + line.open.length + line.prefix.length;
+  }
 
-    case 'content': {
-      return line.lead_whitespace.length + line.open.length + line.prefix.length +
+  case 'content': {
+    return line.lead_whitespace.length + line.open.length + line.prefix.length +
         line.content.length;
-    }
+  }
 
-    case 'suffix': {
-      return line.lead_whitespace.length + line.open.length + line.prefix.length +
+  case 'suffix': {
+    return line.lead_whitespace.length + line.open.length + line.prefix.length +
         line.content.length + line.suffix.length;
-    }
+  }
 
-    case 'close': {
-      return line.lead_whitespace.length + line.open.length + line.prefix.length +
+  case 'close': {
+    return line.lead_whitespace.length + line.open.length + line.prefix.length +
         line.content.length + line.suffix.length + line.close.length;
-    }
+  }
 
-    default: {
-      throw new Error(`Unknown/unsupported region "${<string>region}"`);
-    }
+  default: {
+    throw new Error(`Unknown/unsupported region "${<string>region}"`);
+  }
   }
 }
 
