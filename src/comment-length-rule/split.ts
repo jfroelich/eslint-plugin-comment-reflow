@@ -1,7 +1,7 @@
 import assert from 'assert';
 import eslint from 'eslint';
 import estree from 'estree';
-import { CommentLine, endIndexOf, isLeadWhitespaceAligned, tokenize } from './util';
+import { CommentLine, containsJSDocTag, containsMarkdownList, endIndexOf, isLeadWhitespaceAligned, tokenize } from './util';
 
 export function split(current: CommentLine, next?: CommentLine) {
   if (next) {
@@ -106,10 +106,10 @@ function createLoc(current: CommentLine, next: CommentLine) {
   // line and will only be creating a new one.
 
   let endLocPosition: estree.Position;
-  if (isLeadWhitespaceAligned(current, next) && next && next.content) {
+  if (willSplitMerge(current, next)) {
     endLocPosition = {
       line: next.index,
-      column: next.comment.loc.end.column
+      column: next.text.length
     };
   } else {
     endLocPosition = {
@@ -125,6 +125,38 @@ function createLoc(current: CommentLine, next: CommentLine) {
     },
     end: endLocPosition
   };
+}
+
+function willSplitMerge(current: CommentLine, next?: CommentLine) {
+  if (!next) {
+    return false;
+  }
+
+  if (!next.content) {
+    return false;
+  }
+
+  if (next.directive) {
+    return false;
+  }
+
+  if (next.fixme) {
+    return false;
+  }
+
+  if (!isLeadWhitespaceAligned(current, next)) {
+    return false;
+  }
+
+  if (containsMarkdownList(next)) {
+    return false;
+  }
+
+  if (containsJSDocTag(next)) {
+    return false;
+  }
+
+  return true;
 }
 
 function createReplacementRange(current: CommentLine, lineBreakpoint: number, next?: CommentLine) {
@@ -165,7 +197,7 @@ function createReplacementRange(current: CommentLine, lineBreakpoint: number, ne
   let rangeEndLine: number;
   let rangeEndColumn: number;
 
-  if (isLeadWhitespaceAligned(current, next) && next && next.content) {
+  if (willSplitMerge(current, next)) {
     rangeEndLine = next.index;
     rangeEndColumn = endIndexOf(next, 'prefix');
   } else {
@@ -319,7 +351,7 @@ function composeReplacementText(current: CommentLine, contentBreakpoint: number,
 
   replacementText += current.suffix;
 
-  if (isLeadWhitespaceAligned(current, next) && next && next.content) {
+  if (willSplitMerge(current, next)) {
     // Keep the text moved from the current line into the next line separated from the existing text
     // of the next line.
     replacementText += ' ';

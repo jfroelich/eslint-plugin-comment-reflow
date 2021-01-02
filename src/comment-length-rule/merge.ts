@@ -1,5 +1,5 @@
 import eslint from 'eslint';
-import { CommentLine, endIndexOf, isLeadWhitespaceAligned, tokenize } from './util';
+import { CommentLine, containsJSDocTag, containsMarkdownList, endIndexOf, isLeadWhitespaceAligned, tokenize } from './util';
 
 export function merge(previous: CommentLine, current: CommentLine) {
   if (!previous) {
@@ -50,12 +50,11 @@ export function merge(previous: CommentLine, current: CommentLine) {
     return;
   }
 
-  if (current.comment.type === 'Block' && (current.markup.startsWith('*') ||
-    current.markup.startsWith('-') || /^\d/.test(current.markup))) {
+  if (containsMarkdownList(current)) {
     return;
   }
 
-  if (current.comment.type === 'Block' && current.markup.startsWith('@')) {
+  if (containsJSDocTag(current)) {
     return;
   }
 

@@ -225,7 +225,7 @@ export function parseLine(context: CommentContext, comment: estree.Comment, line
     throw new TypeError(`Unexpected comment type "${<string>comment.type}"`);
   }
 
-  const [markup, markupSpace] = parseMarkup(comment, line.prefix, line.content);
+  const [markup, markupSpace] = parseMarkup(line);
   line.markup = markup;
   line.markup_space = markupSpace;
 
@@ -240,36 +240,44 @@ export function parseLine(context: CommentContext, comment: estree.Comment, line
  * and the second is trailing whitespace if any. This focuses on markdown but it can also match
  * jsdoc.
  *
- * @todo use line parameter instead of 3 params
  * @todo consider creating a jsdoc prop and a markdown prop and not mixing the two.
  */
-function parseMarkup(comment: estree.Comment, prefix: string, content: string) {
+function parseMarkup(line: CommentLine) {
   // Only recognize markup in block comments.
-  if (comment.type !== 'Block') {
+  if (line.comment.type !== 'Block') {
     return ['', ''];
   }
 
   // Only recognize markup in javadoc comments
-  if (!prefix.startsWith('*')) {
+  if (!line.prefix.startsWith('*')) {
     return ['', ''];
   }
 
-  if (!content.length) {
+  if (!line.content.length) {
     return ['', ''];
+  }
+
+  // For jsdoc tags, we cannot require a trailing space, so for simplicitly this is a separate
+  // regex test than the markdown pattern. Might combine in the future for perf.
+
+  const jsdocMatches = /^(@[a-zA-Z]+)(\s*)/.exec(line.content);
+  if (jsdocMatches && jsdocMatches.length) {
+    return [jsdocMatches[1], jsdocMatches[2] ? jsdocMatches[2] : ''];
   }
 
   // TODO: markdown horizontal rules
   // TODO: indented lists (we might already support this because whitespace in prefix)
 
-  const matches = /^([*-]|\d+\.|@[a-zA-Z]+|#{1,6})(\s+)/.exec(content);
+  const matches = /^([*-]|\d+\.|#{1,6})(\s+)/.exec(line.content);
   if (matches && matches.length === 3) {
     return [matches[1], matches[2]];
   }
 
   // markdown table parsing, this probably could be written better
+  // TODO: support trailing space
 
-  if (/^\|.+\|$/.test(content)) {
-    return [content, ''];
+  if (/^\|.+\|$/.test(line.content)) {
+    return [line.content, ''];
   }
 
   return ['', ''];
@@ -448,6 +456,15 @@ export function isLeadWhitespaceAligned(current: CommentLine, next?: CommentLine
   }
 
   return current.lead_whitespace.length === next.lead_whitespace.length;
+}
+
+export function containsMarkdownList(line: CommentLine) {
+  return line.comment.type === 'Block' && (line.markup.startsWith('*') ||
+    line.markup.startsWith('-') || /^\d/.test(line.markup));
+}
+
+export function containsJSDocTag(line: CommentLine) {
+  return line.comment.type === 'Block' && line.markup.startsWith('@');
 }
 
 /**
