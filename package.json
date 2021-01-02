@@ -1,11 +1,12 @@
 {
   "name": "eslint-plugin-comment-reflow",
   "version": "1.2.0",
-  "main": "dist/index.js",
+  "main": "dist/src/index.js",
   "scripts": {
-    "prepack": "rm -rf dist && tsc -w false",
+    "prepack": "rm -rf dist && tsc",
     "tsc": "tsc -w true",
-    "fix": "eslint --ext ts src/* --fix"
+    "fix": "eslint --ext ts src/* --fix",
+    "test": "rm -rf dist && tsc && node dist/tests"
   },
   "repository": {
     "type": "git",

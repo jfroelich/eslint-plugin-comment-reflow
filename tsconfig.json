@@ -12,9 +12,15 @@
     "declaration": false,
     "removeComments": true,
     "noImplicitAny": true,
-    "strictNullChecks": false
+    "strictNullChecks": false,
+    "watch": false
   },
   "include": [
-    "src"
+    "src",
+    "tests"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist"
   ]
 }
