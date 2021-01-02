@@ -83,8 +83,6 @@ function analyzeProgram(ruleContext: eslint.Rule.RuleContext, node: estree.Node)
         previousLine = currentLine;
       }
 
-      // we have to call split once more for the final line of the comment
-
       const report = split(previousLine);
       if (report) {
         ruleContext.report(report);
@@ -111,10 +109,6 @@ function analyzeProgram(ruleContext: eslint.Rule.RuleContext, node: estree.Node)
       finalLineCommentLine = currentLine;
     }
   }
-
-  // TODO: analyze at the time of visit, not at the very end. it is weird to see a bug in a long
-  // line comment but not see a linting error and instead see only a linting error in some later
-  // block comment.
 
   if (finalLineCommentLine) {
     const report = split(finalLineCommentLine);
