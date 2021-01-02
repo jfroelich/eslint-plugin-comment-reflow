@@ -14,7 +14,8 @@ A line that begins with a markdown list is not merged.
 The plugin tries to respect indentation both outside and inside of a multi-line comment. If a line 
 is split, the new line will also be indented.
 ## Setup
-1. `npm install --save-dev eslint-plugin-comment-reflow`
+1. `npm install --save-dev eslint-plugin-comment-reflow`. The NPM url is 
+https://www.npmjs.com/package/eslint-plugin-comment-reflow.
 2. Add the plugin to eslint config:
 ```json
 {
