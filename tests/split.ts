@@ -1,5 +1,5 @@
 import eslint from 'eslint';
-import { commentLengthRule } from '../src/comment-length-rule';
+import commentLengthRule from '../src/comment-length-rule';
 
 const config: eslint.Linter.Config = {
   parserOptions: {

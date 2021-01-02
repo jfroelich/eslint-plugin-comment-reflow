@@ -5,7 +5,7 @@ import { merge } from './merge';
 import { split } from './split';
 import { CommentContext, CommentLine, parseLine, sniffLineBreakStyle } from './util';
 
-export const commentLengthRule: eslint.Rule.RuleModule = {
+const commentLengthRule: eslint.Rule.RuleModule = {
   meta: {
     type: 'layout',
     fixable: 'whitespace',
@@ -16,6 +16,8 @@ export const commentLengthRule: eslint.Rule.RuleModule = {
   },
   create: createCommentLengthRule
 };
+
+export default commentLengthRule;
 
 function createCommentLengthRule(context: eslint.Rule.RuleContext) {
   return {

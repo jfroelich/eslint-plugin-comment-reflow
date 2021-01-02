@@ -1,4 +1,4 @@
-import { commentLengthRule } from './comment-length-rule';
+import commentLengthRule from './comment-length-rule';
 
 export = {
   rules: {
