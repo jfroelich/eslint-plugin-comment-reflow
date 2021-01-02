@@ -1,6 +1,10 @@
 src
+!dist/src
 .vscode
 .eslintignore
 tsconfig.json
-CONTRIBUTING.md
-LICENSE
+tests
+dist/tests
+*.tgz
+*.zip
+*.log
