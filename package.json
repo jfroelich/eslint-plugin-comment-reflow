@@ -21,10 +21,12 @@
     "extends": [
       "plugin:@typescript-eslint/recommended",
       "plugin:@typescript-eslint/eslint-recommended",
-      "plugin:@typescript-eslint/recommended-requiring-type-checking"
+      "plugin:@typescript-eslint/recommended-requiring-type-checking",
+      "plugin:eslint-plugin-eslint-plugin/recommended"
     ],
     "plugins": [
-      "@typescript-eslint"
+      "@typescript-eslint",
+      "eslint-plugin-eslint-plugin"
     ],
     "rules": {
       "semi": [
