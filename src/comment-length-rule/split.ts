@@ -173,12 +173,9 @@ function createReplacementRange(current: CommentLine, lineBreakpoint: number, ne
       column: endIndexOf(current, 'content')
     });
 
-    // TODO: i think i would prefer to use endIndexOf(current, 'suffix') here for consistency?
-
     const rangeEnd = current.context.code.getIndexFromLoc({
       line: next ? next.index : current.index,
-      // subtract 2 for the close syntax
-      column: current.comment.loc.end.column - current.close.length
+      column: endIndexOf(current, 'suffix')
     });
     return <eslint.AST.Range>[rangeStart, rangeEnd];
   }
