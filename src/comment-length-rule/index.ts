@@ -106,6 +106,10 @@ function analyzeProgram(ruleContext: eslint.Rule.RuleContext, node: estree.Node)
           previousLine.index + 1 === currentLine.index ? currentLine : null);
         if (report) {
           ruleContext.report(report);
+
+          // similar issue to block split, i dont want to do this but right now without this the
+          // multiple fixes are wrong
+          continue;
         }
       }
 
