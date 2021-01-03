@@ -1,6 +1,5 @@
 import assert from 'assert';
 import eslint from 'eslint';
-import estree from 'estree';
 import { CommentLine, containsJSDocTag, containsMarkdownList, endIndexOf, isLeadWhitespaceAligned, tokenize } from './util';
 
 export function split(current: CommentLine, next?: CommentLine) {
@@ -66,7 +65,7 @@ export function split(current: CommentLine, next?: CommentLine) {
   const lineBreakpoint = findLineBreak(current, tokenSplitIndex, contentBreakpoint);
   const replacementText = composeReplacementText(current, contentBreakpoint, next);
 
-  const loc = createLoc(current, next);
+  const loc = createLoc(current, lineBreakpoint, next);
   const range = createReplacementRange(current, lineBreakpoint, next);
 
   const report: eslint.Rule.ReportDescriptor = {
@@ -85,7 +84,8 @@ export function split(current: CommentLine, next?: CommentLine) {
   return report;
 }
 
-function createLoc(current: CommentLine, next: CommentLine) {
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+function createLoc(current: CommentLine, lineBreakpoint: number, next: CommentLine) {
   // special case for last line of block comment with content under limit and suffix over limit
   if (current.comment.type === 'Block' && current.index === current.comment.loc.end.line &&
     endIndexOf(current, 'content') <= current.context.max_line_length) {
@@ -105,23 +105,28 @@ function createLoc(current: CommentLine, next: CommentLine) {
   // We have to check if the lead whitespace aligns. If not, we will not be merging into the next
   // line and will only be creating a new one.
 
-  let endLocPosition: estree.Position;
-  if (willSplitMerge(current, next)) {
-    endLocPosition = {
-      line: next.index,
-      column: next.text.length
-    };
-  } else {
-    endLocPosition = {
-      line: current.index,
-      column: current.text.length
-    };
-  }
+  // let endLocPosition: estree.Position;
+  // if (willSplitMerge(current, next)) {
+  //   endLocPosition = {
+  //     line: next.index,
+  //     column: next.text.length
+  //   };
+  // } else {
+  //   endLocPosition = {
+  //     line: current.index,
+  //     column: current.text.length
+  //   };
+  // }
+
+  const endLocPosition = {
+    line: current.index,
+    column: current.text.length
+  };
 
   return <eslint.AST.SourceLocation>{
     start: {
       line: current.index,
-      column: 0
+      column: lineBreakpoint
     },
     end: endLocPosition
   };

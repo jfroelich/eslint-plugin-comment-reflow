@@ -21,6 +21,8 @@ export interface CommentLine {
 
   /**
    * Reference to comment that contains the line.
+   *
+   * @see https://eslint.org/docs/developer-guide/working-with-custom-parsers#all-nodes
    */
   comment: estree.Comment;
 

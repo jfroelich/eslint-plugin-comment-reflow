@@ -19,7 +19,7 @@ export default <eslint.Rule.RuleModule>{
 
 function createCommentLengthRule(context: eslint.Rule.RuleContext) {
   return {
-    Program(node: estree.Node) {
+    Program: function(node: estree.Node) {
       return analyzeProgram(context, node);
     }
   };
@@ -70,6 +70,17 @@ function analyzeProgram(ruleContext: eslint.Rule.RuleContext, node: estree.Node)
           const report = split(previousLine, previousLine.index + 1 === line ? currentLine : null);
           if (report) {
             ruleContext.report(report);
+
+            // TODO: I do not yet understand why, but if we continue to report additional errors on
+            // this comment things do not work so well, so, for now, exit. eslint re-evaluates
+            // anyway. The only bad part is we do not see all the errors at once, just the first
+            // error per block comment.
+
+            // Regarding the error, my best guess is that it is because we generate multiple fixes
+            // and some of the fixes overlap. The docs explicitly say not to do this.
+
+            // See https://eslint.org/docs/developer-guide/working-with-rules
+            continue;
           }
         }
 
