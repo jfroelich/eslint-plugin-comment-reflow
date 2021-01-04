@@ -40,12 +40,7 @@ export function merge(previous: CommentLine, current: CommentLine) {
     }
   }
 
-  // TODO: shouldn't this be end index of close, not suffix, even though close is empty? could it
-  // ever not be empty? so in a single line case, there is no close, so it is empty. in the block
-  // case, it is also empty, but only because we guarantee we never try to merge two blocks. still,
-  // it might be better to use close here? if it is confusing at first glance then something is off.
-
-  const previousLineEndPosition = endIndexOf(previous, 'suffix');
+  const previousLineEndPosition = endIndexOf(previous, 'close');
   if (previousLineEndPosition >= previous.context.max_line_length) {
     return;
   }
