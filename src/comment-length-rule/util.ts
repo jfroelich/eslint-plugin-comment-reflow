@@ -157,12 +157,11 @@ export function endIndexOf(line: CommentLine, region: Region) {
   }
 }
 
-export function parseLine(context: CommentContext, comment: estree.Comment, lineIndex: number) {
+export function parseLine(code: eslint.SourceCode, comment: estree.Comment, lineIndex: number) {
   const line = <CommentLine>{};
-  line.context = context;
   line.comment = comment;
   line.index = lineIndex;
-  line.text = context.code.lines[lineIndex - 1];
+  line.text = code.lines[lineIndex - 1];
 
   const textTrimmedStart = line.text.trimStart();
   line.lead_whitespace = line.text.slice(0, line.text.length - textTrimmedStart.length);
