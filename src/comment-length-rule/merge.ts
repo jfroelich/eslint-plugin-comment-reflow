@@ -141,8 +141,8 @@ export function merge(previous: CommentLine, current: CommentLine) {
     node: previous.context.node,
     loc: {
       start: {
-        line: previous.index,
-        column: previous.lead_whitespace.length + previous.open.length + previous.prefix.length
+        line: current.index,
+        column: 0
       },
       end: {
         line: current.index,
@@ -151,8 +151,7 @@ export function merge(previous: CommentLine, current: CommentLine) {
     },
     messageId: 'merge',
     data: {
-      line_length: `${current.text.length}`,
-      max_length: `${previous.context.max_line_length}`
+      line: `${current.index}`
     },
     fix: function (fixer) {
       return fixer.replaceTextRange([rangeStart, rangeEnd], replacementText);

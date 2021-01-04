@@ -65,7 +65,21 @@ export function split(current: CommentLine, next?: CommentLine) {
   const lineBreakpoint = findLineBreak(current, tokenSplitIndex, contentBreakpoint);
   const replacementText = composeReplacementText(current, contentBreakpoint, next);
 
-  const loc = createLoc(current, lineBreakpoint, next);
+  // For a split, we always draw squigglies under the entire current line. Even though we might be
+  // replacing text in the next line when fixing the issue. I guess location and replacement range
+  // are not required to be equal?
+
+  const loc = <eslint.AST.SourceLocation>{
+    start: {
+      line: current.index,
+      column: 0
+    },
+    end: {
+      line: current.index,
+      column: endIndexOf(current, 'close')
+    }
+  };
+
   const range = createReplacementRange(current, lineBreakpoint, next);
 
   const report: eslint.Rule.ReportDescriptor = {
@@ -73,8 +87,8 @@ export function split(current: CommentLine, next?: CommentLine) {
     loc,
     messageId: 'split',
     data: {
-      line_length: `${current.text.length}`,
-      max_length: `${current.context.max_line_length}`
+      line: `${current.index}`,
+      column: `${lineBreakpoint}`
     },
     fix: function (fixer) {
       return fixer.replaceTextRange(range, replacementText);
@@ -82,54 +96,6 @@ export function split(current: CommentLine, next?: CommentLine) {
   };
 
   return report;
-}
-
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-function createLoc(current: CommentLine, lineBreakpoint: number, next: CommentLine) {
-  // special case for last line of block comment with content under limit and suffix over limit
-  if (current.comment.type === 'Block' && current.index === current.comment.loc.end.line &&
-    endIndexOf(current, 'content') <= current.context.max_line_length) {
-
-    return <eslint.AST.SourceLocation>{
-      start: {
-        line: current.index,
-        column: 0
-      },
-      end: {
-        line: current.index,
-        column: current.comment.loc.end.column
-      }
-    };
-  }
-
-  // We have to check if the lead whitespace aligns. If not, we will not be merging into the next
-  // line and will only be creating a new one.
-
-  // let endLocPosition: estree.Position;
-  // if (willSplitMerge(current, next)) {
-  //   endLocPosition = {
-  //     line: next.index,
-  //     column: next.text.length
-  //   };
-  // } else {
-  //   endLocPosition = {
-  //     line: current.index,
-  //     column: current.text.length
-  //   };
-  // }
-
-  const endLocPosition = {
-    line: current.index,
-    column: current.text.length
-  };
-
-  return <eslint.AST.SourceLocation>{
-    start: {
-      line: current.index,
-      column: lineBreakpoint
-    },
-    end: endLocPosition
-  };
 }
 
 function willSplitMerge(current: CommentLine, next?: CommentLine) {

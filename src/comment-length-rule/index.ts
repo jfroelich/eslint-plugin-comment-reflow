@@ -10,8 +10,8 @@ export default <eslint.Rule.RuleModule>{
     type: 'layout',
     fixable: 'whitespace',
     messages: {
-      split: 'Comment line should be split',
-      merge: 'Comment lines should be merged'
+      split: 'Line {{line}} should break at column {{column}}.',
+      merge: 'Line {{line}} should be merged with previous line.'
     }
   },
   create: createCommentLengthRule
@@ -63,11 +63,13 @@ function analyzeProgram(ruleContext: eslint.Rule.RuleContext, node: estree.Node)
     if (comment.type === 'Block') {
       previousLine = null;
 
+      let reportedSplitLine = -1;
+
       for (let line = comment.loc.start.line; line <= comment.loc.end.line; line++) {
         const currentLine = parseLine(context, comment, line);
 
         if (previousLine) {
-          const report = split(previousLine, previousLine.index + 1 === line ? currentLine : null);
+          const report = split(previousLine, currentLine);
           if (report) {
             ruleContext.report(report);
 
@@ -80,7 +82,11 @@ function analyzeProgram(ruleContext: eslint.Rule.RuleContext, node: estree.Node)
             // and some of the fixes overlap. The docs explicitly say not to do this.
 
             // See https://eslint.org/docs/developer-guide/working-with-rules
-            continue;
+
+            // NOTE: we also do not want to continue here, that generates the same error 10 times
+
+            reportedSplitLine = previousLine.index;
+            break;
           }
         }
 
@@ -92,9 +98,16 @@ function analyzeProgram(ruleContext: eslint.Rule.RuleContext, node: estree.Node)
         previousLine = currentLine;
       }
 
-      const report = split(previousLine);
-      if (report) {
-        ruleContext.report(report);
+      // We have to check we did not already report the same line, even though ordinarily this
+      // should not be required. This logic was written originally because we naively reported all
+      // split errors per block. It turns out that approach has some strange issues. For now this is
+      // a quick bandaid.
+
+      if (previousLine && reportedSplitLine !== previousLine.index) {
+        const report = split(previousLine);
+        if (report) {
+          ruleContext.report(report);
+        }
       }
 
       previousLine = null;
@@ -108,7 +121,7 @@ function analyzeProgram(ruleContext: eslint.Rule.RuleContext, node: estree.Node)
           ruleContext.report(report);
 
           // similar issue to block split, i dont want to do this but right now without this the
-          // multiple fixes are wrong
+          // multiple fixes are wrong.
           continue;
         }
       }
