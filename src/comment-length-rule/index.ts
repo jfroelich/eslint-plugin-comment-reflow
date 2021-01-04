@@ -40,28 +40,6 @@ function analyzeProgram(ruleContext: eslint.Rule.RuleContext, node: estree.Node)
 
   const lineBreakStyle = sniffLineBreakStyle(ruleContext);
 
-  // TODO: create a CommentLineGroup type to represent either the lines of one block comment or
-  // the individual lines of several line comments. Next, refactor the comment iteration. We want
-  // to iterate over the comments one at a time. Each time we encounter a comment, if it is a block
-  // comment, then we first check if there are buffered line comments, process those, and then
-  // process the block comment. Otherwise, if it is a line comment, we check if the buffer is empty.
-  // if the buffer is empty, we append the line to the buffer and continue. If it is not empty, we
-  // check if the new line is subsequent to the last line of the buffer. If it is subsequent, then
-  // we append it to the buffer and continue. If it is not subsequent, then we process the lines in
-  // the buffer as group, clear the buffer, append the new line to the buffer, and continue. Once
-  // we reach the end of the comments, we do one extra check for whether the buffer is empty and
-  // then process it.
-
-  // To process a line buffer, we will call a helper function that processes a CommentLineGroup
-  // object. That one object will check for splits and merges. It will generate replacement text for
-  // the comment line group. If there is no work to be done, then there is no fix. Otherwise, the
-  // helper function returns a single fix that replaces the CommentLineGroup. That single fix may
-  // perform several merges/splits at once. It may replace multiple lines of text at once. It may
-  // affect multiple line comments at once.
-
-  // As we complete the processing of each line group, we call context.report to notify eslint of
-  // the fix and continue. We do not wait until all processing has completed.
-
   for (const comment of comments) {
     const context: CommentContext = {
       node,

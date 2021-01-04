@@ -3,22 +3,27 @@ import eslint from 'eslint';
 import astutil from 'eslint/lib/rules/utils/ast-utils';
 import estree from 'estree';
 
-export interface CommentContext {
+export interface CommentLineGroup {
   node: estree.Node;
   code: eslint.SourceCode;
   line_break: string;
   max_line_length: number;
   in_md_fence?: boolean;
   in_jsdoc_example?: boolean;
+
+  /**
+   * Whether this comment line group represents a single block comment or a group of single line
+   * comments.
+   */
+  type: 'block' | 'line';
+
+  /**
+   * The various comment lines that comprise this comment line group.
+   */
+  lines: CommentLine[];
 }
 
 export interface CommentLine {
-  /**
-   * Reference to the context of the comment that contains the line. This is not accessed via
-   * comment.context because we refrain from injecting custom properties into external objects.
-   */
-  context: CommentContext;
-
   /**
    * Reference to comment that contains the line.
    *
