@@ -1,7 +1,7 @@
 import assert from 'assert';
 import eslint from 'eslint';
 import estree from 'estree';
-import { CommentLine, CommentLineGroup, parseLine } from './util';
+import { CommentLine, CommentLineGroup, parseLine, sniffLineBreakStyle } from './util';
 
 export default <eslint.Rule.RuleModule>{
   meta: {
@@ -34,22 +34,11 @@ function analyzeProgram(ruleContext: eslint.Rule.RuleContext/*, node: estree.Nod
   const comments = code.getAllComments();
   const candidates = comments.filter(isCandidateComment, ruleContext);
   const groups = findCommentGroups(ruleContext, candidates);
-
-  for (const group of groups) {
-    console.log('group starts on line %d and ends on line %d (%d lines)',
-      group.lines[0].comment.loc.start.line,
-      group.lines[group.lines.length -1].comment.loc.end.line,
-      group.lines.length);
-  }
-
-  // TODO: analyze the groups and generate reports
-  // const lineBreakStyle = sniffLineBreakStyle(ruleContext);
-
-  // TODO: iterate over the reports and report each one
-  //   const reports: eslint.Rule.ReportDescriptor[] = [];
+  const descriptors = analyzeGroups(ruleContext, groups);
+  descriptors.forEach(descriptor => ruleContext.report(descriptor));
 }
 
-export function isCandidateComment(this: eslint.Rule.RuleContext, comment: estree.Comment) {
+function isCandidateComment(this: eslint.Rule.RuleContext, comment: estree.Comment) {
   if (comment.type !== 'Block' && comment.type !== 'Line') {
     return false;
   }
@@ -70,7 +59,7 @@ export function isCandidateComment(this: eslint.Rule.RuleContext, comment: estre
   return true;
 }
 
-export function findCommentGroups(context: eslint.Rule.RuleContext, comments: estree.Comment[]) {
+function findCommentGroups(context: eslint.Rule.RuleContext, comments: estree.Comment[]) {
   const code = context.getSourceCode();
   const groups: Partial<CommentLineGroup>[] = [];
   let buffer: CommentLine[] = [];
@@ -104,4 +93,28 @@ export function findCommentGroups(context: eslint.Rule.RuleContext, comments: es
   }
 
   return <CommentLineGroup[]>groups;
+}
+
+export function analyzeGroups(ruleContext: eslint.Rule.RuleContext, groups: CommentLineGroup[]) {
+  const lineBreakStyle = sniffLineBreakStyle(ruleContext);
+  console.log('line break "%s"', lineBreakStyle.replace(/\r/g, '\\r').replace(/\n/g, '\\n'));
+
+  const reports: eslint.Rule.ReportDescriptor[] = [];
+  for (const group of groups) {
+    const report = analyzeGroup(group);
+    if (report) {
+      reports.push(report);
+    }
+  }
+  return reports;
+}
+
+function analyzeGroup(group: CommentLineGroup) {
+  console.log('group starts on line %d and ends on line %d (%d lines)',
+    group.lines[0].comment.loc.start.line,
+    group.lines[group.lines.length -1].comment.loc.end.line,
+    group.lines.length);
+
+  const descriptor: eslint.Rule.ReportDescriptor = null;
+  return descriptor;
 }
