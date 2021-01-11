@@ -70,17 +70,6 @@ export function isCandidateComment(this: eslint.Rule.RuleContext, comment: estre
   return true;
 }
 
-/**
- * Scans the comments array and aggregates comments into groups. Block comments represent 1 group.
- * Sequential line comments represent 1 group.
- *
- * This assumes that comments are the only token on the line. Filtered comments serve as delimiters
- * of line comments because of the subsequent-line check so there is no risk of swallowing them.
- *
- * This assumes shebang-type comments not present in input comments.
- *
- * @returns an array of groups
- */
 export function findCommentGroups(context: eslint.Rule.RuleContext, comments: estree.Comment[]) {
   const code = context.getSourceCode();
   const groups: Partial<CommentLineGroup>[] = [];
@@ -114,5 +103,5 @@ export function findCommentGroups(context: eslint.Rule.RuleContext, comments: es
     groups.push({ type: 'line', lines: buffer });
   }
 
-  return groups;
+  return <CommentLineGroup[]>groups;
 }
