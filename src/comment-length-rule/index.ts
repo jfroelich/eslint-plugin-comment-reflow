@@ -33,11 +33,15 @@ function analyzeProgram(ruleContext: eslint.Rule.RuleContext/*, node: estree.Nod
 
   const code = ruleContext.getSourceCode();
   const comments = code.getAllComments();
+  const candidates = findCandidateComments(ruleContext, comments);
+  const groups = findCommentGroups(ruleContext, candidates);
 
-  const isolatedComments = findCandidateComments(ruleContext, comments);
-  const groups = findCommentGroups(ruleContext, isolatedComments);
-
-  console.log(groups);
+  for (const group of groups) {
+    console.log('group starts on line %d and ends on line %d (%d lines)',
+      group.lines[0].comment.loc.start.line,
+      group.lines[group.lines.length -1].comment.loc.end.line,
+      group.lines.length);
+  }
 
   // TODO: analyze the groups and generate reports
   // const lineBreakStyle = sniffLineBreakStyle(ruleContext);
@@ -79,55 +83,47 @@ function findCandidateComments(context: eslint.Rule.RuleContext, comments: estre
 }
 
 /**
- * Scans the incoming array and aggregates comments into groups. Block comments represent 1 group.
+ * Scans the comments array and aggregates comments into groups. Block comments represent 1 group.
  * Sequential line comments represent 1 group.
  *
- * This assumes that comments are the only token on the line.
+ * This assumes that comments are the only token on the line. Filtered comments serve as delimiters
+ * of line comments because of the subsequent-line check so there is no risk of swallowing them.
  *
- * @todo maybe eagerly parsing is bad if we do not always use all the lines? i like maintaining the
- * link to the comment of the line though.
+ * This assumes shebang-type comments not present in input comments.
+ *
+ * @returns an array of groups
  */
 export function findCommentGroups(context: eslint.Rule.RuleContext, comments: estree.Comment[]) {
   const code = context.getSourceCode();
   const groups: Partial<CommentLineGroup>[] = [];
-  let lines: CommentLine[] = [];
+  let buffer: CommentLine[] = [];
 
   for (const comment of comments) {
     if (comment.type === 'Block') {
-      if (lines.length) {
-        groups.push({ type: 'line', lines });
-        lines = [];
+      if (buffer.length) {
+        groups.push({ type: 'line', lines: buffer });
+        buffer = [];
       }
 
       for (let line = comment.loc.start.line; line <= comment.loc.end.line; line++) {
-        const currentLine = parseLine(code, comment, line);
-        lines.push(currentLine);
+        buffer.push(parseLine(code, comment, line));
       }
 
-      groups.push({ type: 'block', lines });
-      lines = [];
+      groups.push({ type: 'block', lines: buffer });
+      buffer = [];
     } else if (comment.type === 'Line') {
       const currentLine = parseLine(code, comment, comment.loc.start.line);
-
-      // when there is no previous line comment, append to buffer. when the current line is
-      // immediately subsequent to the previous line, append to buffer. otherwise, there are
-      // distinct groups of line comments, so flush the current buffer and start anew.
-      if (lines.length === 0 || lines[lines.length -1].index + 1 === comment.loc.start.line) {
-        lines.push(currentLine);
+      if (buffer.length === 0 || buffer[buffer.length - 1].index + 1 === currentLine.index) {
+        buffer.push(currentLine);
       } else {
-        groups.push({ type: 'line', lines });
-        lines = [currentLine];
+        groups.push({ type: 'line', lines: buffer });
+        buffer = [currentLine];
       }
-    } else {
-      // ignore shebang
     }
   }
 
-  // Due to the how the iteration is structured, we have to account for the final buffer of lines at
-  // the end.
-
-  if (lines.length) {
-    groups.push({ type: 'line', lines });
+  if (buffer.length) {
+    groups.push({ type: 'line', lines: buffer });
   }
 
   return groups;
