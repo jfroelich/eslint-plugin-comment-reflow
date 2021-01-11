@@ -37,40 +37,9 @@ function analyzeProgram(ruleContext: eslint.Rule.RuleContext, node: estree.Node)
   let lines: CommentLine[] = [];
   const reports: eslint.Rule.ReportDescriptor[] = [];
 
-  for (const comment of comments) {
-    const previousToken = code.getTokenBefore(comment, { includeComments: true });
-    if (previousToken && previousToken.loc.end.line === comment.loc.start.line) {
-      if (lines.length) {
-        const group = <CommentLineGroup>{
-          type: 'line',
-          node,
-          code,
-          line_break: lineBreakStyle,
-          max_line_length: maxLineLength,
-          lines
-        };
-        reports.push(analyzeGroup(group));
-      }
+  const isolatedComments = findIsolatedComments(ruleContext, comments);
 
-      continue;
-    }
-
-    const nextToken = code.getTokenAfter(comment, { includeComments: true });
-    if (nextToken && comment.loc.end.line === nextToken.loc.start.line) {
-      if (lines.length) {
-        const group = <CommentLineGroup>{
-          type: 'line',
-          node,
-          code,
-          line_break: lineBreakStyle,
-          max_line_length: maxLineLength,
-          lines
-        };
-        reports.push(analyzeGroup(group));
-      }
-      continue;
-    }
-
+  for (const comment of isolatedComments) {
     if (comment.type === 'Block') {
       if (lines.length) {
         const group = <CommentLineGroup>{
@@ -136,6 +105,31 @@ function analyzeProgram(ruleContext: eslint.Rule.RuleContext, node: estree.Node)
   console.log('Found %d report descriptors', reports.length);
 
   // todo: iterate over the reports and report each one
+}
+
+/**
+ * Returns an array of comments that do not share lines with non-comment tokens.
+ */
+function findIsolatedComments(context: eslint.Rule.RuleContext, comments: estree.Comment[]) {
+  const code = context.getSourceCode();
+
+  return comments.filter(comment => {
+    const previousToken = code.getTokenBefore(comment, { includeComments: true });
+    if (previousToken && previousToken.loc.end.line === comment.loc.start.line) {
+      return false;
+    }
+
+    // Only block comments can have a subsequent token on the same line.
+
+    if (comment.type === 'Block') {
+      const nextToken = code.getTokenAfter(comment, { includeComments: true });
+      if (nextToken && comment.loc.end.line === nextToken.loc.start.line) {
+        return false;
+      }
+    }
+
+    return true;
+  });
 }
 
 function analyzeGroup(group: CommentLineGroup) {
