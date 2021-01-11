@@ -121,8 +121,6 @@ export function analyzeGroups(ruleContext: eslint.Rule.RuleContext, groups: Grou
 }
 
 function analyzeGroup(group: Group) {
-  console.log('group:', group);
-
   // TODO: we want to generate one report for a group, which could either be one or several
   // comments. we want to look for all the splits and merges and iteratively perform them until
   // nothing changed. then, if anything changed, return a report. so, unlike before, each individual
@@ -132,8 +130,26 @@ function analyzeGroup(group: Group) {
   // we want to analyze splits from the top down, then analyze merges from the top down. this way we
   // move text down once, then move text up once, which is the least amount of changes to make.
 
+  // Track whether we made any changes
+  // eslint-disable-next-line prefer-const
+  let dirtied = false;
+
+  // Analyze splits.
+
+  let groupLineIndex = 0;
+  while (true) {
+    const groupLine = group.lines[groupLineIndex];
+    const lineDesc = parseLine(group, groupLine, groupLineIndex);
+    console.log(lineDesc);
+
+    groupLineIndex++;
+    if (groupLineIndex === group.lines.length) {
+      break;
+    }
+  }
+
   const descriptor: eslint.Rule.ReportDescriptor = null;
-  return descriptor;
+  return dirtied ? descriptor : null;
 }
 
 export function sniffLineBreakStyle(context: eslint.Rule.RuleContext) {
@@ -276,16 +292,20 @@ export function endIndexOf(line: CommentLine, region: Region) {
   }
 }
 
-export function parseLine(code: eslint.SourceCode, comment: estree.Comment, lineIndex: number) {
+/**
+ * @todo cannot use original eslint comment location values any more since we are mutating the text
+ * during analysis and re-analyzing mutated text. so we need to figure this stuff out dynamically
+ * repeatedly, this is the next todo. also, do not forget the helpers to this function.
+ */
+export function parseLine(group: Group, groupLine: GroupLine, groupLineIndex: number) {
   const line = <CommentLine>{};
-  line.comment = comment;
-  line.index = lineIndex;
-  line.text = code.lines[lineIndex - 1];
+  line.comment = groupLine.comment;
+  line.text = groupLine.text;
 
   const textTrimmedStart = line.text.trimStart();
   line.lead_whitespace = line.text.slice(0, line.text.length - textTrimmedStart.length);
 
-  if (comment.type === 'Line') {
+  if (group.type === 'line') {
     line.open = '//';
     line.close = '';
 
@@ -301,19 +321,21 @@ export function parseLine(code: eslint.SourceCode, comment: estree.Comment, line
       line.prefix.length).trimEnd();
     line.suffix = line.text.slice(line.lead_whitespace.length + line.open.length +
       line.prefix.length + line.content.length);
-  } else if (comment.type === 'Block') {
-    if (lineIndex === comment.loc.start.line && lineIndex === comment.loc.end.line) {
+  } else if (group.type === 'block') {
+    if (group.lines.length === 1) {
       line.open = '/*';
       line.close = '*/';
       const prefixHaystack = line.text.slice(line.lead_whitespace.length + line.open.length,
-        comment.loc.end.column - line.close.length);
+        groupLine.comment.loc.end.column - line.close.length);
       const prefixMatch = /^\**\s*/.exec(prefixHaystack);
       line.prefix = prefixMatch ? prefixMatch[0] : '';
       line.content = line.text.slice(line.lead_whitespace.length + line.open.length +
-        line.prefix.length, comment.loc.end.column - line.close.length).trimEnd();
-      line.suffix = line.text.slice(line.lead_whitespace.length + line.open.length +
-        line.prefix.length + line.content.length, comment.loc.end.column - line.close.length);
-    } else if (lineIndex === comment.loc.start.line) {
+        line.prefix.length, groupLine.comment.loc.end.column - line.close.length).trimEnd();
+      line.suffix = line.text.slice(
+        line.lead_whitespace.length + line.open.length + line.prefix.length + line.content.length,
+        groupLine.comment.loc.end.column - line.close.length
+      );
+    } else if (groupLineIndex === 0) {
       line.open = '/*';
       line.close = '';
       const prefixHaystack = line.text.slice(line.lead_whitespace.length + line.open.length);
@@ -323,17 +345,19 @@ export function parseLine(code: eslint.SourceCode, comment: estree.Comment, line
         line.prefix.length).trimEnd();
       line.suffix = line.text.slice(line.lead_whitespace.length + line.open.length +
         line.prefix.length + line.content.length);
-    } else if (lineIndex === comment.loc.end.line) {
+    } else if (groupLineIndex === group.lines.length - 1) {
       line.open = '';
       line.close = '*/';
       const prefixHaystack = line.text.slice(line.lead_whitespace.length,
-        comment.loc.end.column - line.close.length);
+        groupLine.comment.loc.end.column - line.close.length);
       const prefixMatch = /^\*\s+/.exec(prefixHaystack);
       line.prefix = prefixMatch ? prefixMatch[0] : '';
       line.content = line.text.slice(line.lead_whitespace.length + line.open.length +
-        line.prefix.length, comment.loc.end.column - line.close.length).trimEnd();
-      line.suffix = line.text.slice(line.lead_whitespace.length + line.open.length +
-        line.prefix.length + line.content.length, comment.loc.end.column - line.close.length);
+        line.prefix.length, groupLine.comment.loc.end.column - line.close.length).trimEnd();
+      line.suffix = line.text.slice(
+        line.lead_whitespace.length + line.open.length + line.prefix.length + line.content.length,
+        groupLine.comment.loc.end.column - line.close.length
+      );
     } else {
       line.open = '';
       line.close = '';
@@ -344,10 +368,6 @@ export function parseLine(code: eslint.SourceCode, comment: estree.Comment, line
       line.suffix = line.text.slice(line.lead_whitespace.length + line.open.length +
         line.prefix.length + line.content.length);
     }
-  } else {
-    // eslint for some reason if forgetting about its own shebang type in the AST
-    // TODO: define my own Comment type and use it in place of eslint's erroneous type
-    throw new TypeError(`Unexpected comment type "${<string>comment.type}"`);
   }
 
   const [markup, markupSpace] = parseMarkup(line);
