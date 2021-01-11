@@ -32,7 +32,7 @@ function analyzeProgram(ruleContext: eslint.Rule.RuleContext/*, node: estree.Nod
 
   const code = ruleContext.getSourceCode();
   const comments = code.getAllComments();
-  const candidates = findCandidateComments(ruleContext, comments);
+  const candidates = comments.filter(isCandidateComment, ruleContext);
   const groups = findCommentGroups(ruleContext, candidates);
 
   for (const group of groups) {
@@ -49,36 +49,25 @@ function analyzeProgram(ruleContext: eslint.Rule.RuleContext/*, node: estree.Nod
   //   const reports: eslint.Rule.ReportDescriptor[] = [];
 }
 
-/**
- * Returns an array of comments that do not share lines with non-comment tokens.
- */
-function findCandidateComments(context: eslint.Rule.RuleContext, comments: estree.Comment[]) {
-  const code = context.getSourceCode();
+export function isCandidateComment(this: eslint.Rule.RuleContext, comment: estree.Comment) {
+  if (comment.type !== 'Block' && comment.type !== 'Line') {
+    return false;
+  }
 
-  return comments.filter(comment => {
-    // ignore shebang
-    if (comment.type !== 'Block' && comment.type !== 'Line') {
+  const code = this.getSourceCode();
+  const token = code.getTokenBefore(comment, { includeComments: true });
+  if (token && token.loc.end.line === comment.loc.start.line) {
+    return false;
+  }
+
+  if (comment.type === 'Block') {
+    const token = code.getTokenAfter(comment, { includeComments: true });
+    if (token && comment.loc.end.line === token.loc.start.line) {
       return false;
     }
+  }
 
-    // ignore comments where another token precedes on same line
-
-    const previousToken = code.getTokenBefore(comment, { includeComments: true });
-    if (previousToken && previousToken.loc.end.line === comment.loc.start.line) {
-      return false;
-    }
-
-    // Only block comments can have a subsequent token on the same line.
-
-    if (comment.type === 'Block') {
-      const nextToken = code.getTokenAfter(comment, { includeComments: true });
-      if (nextToken && comment.loc.end.line === nextToken.loc.start.line) {
-        return false;
-      }
-    }
-
-    return true;
-  });
+  return true;
 }
 
 /**
