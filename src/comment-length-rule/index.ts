@@ -137,20 +137,9 @@ function analyzeGroup(group: Group) {
 }
 
 export function sniffLineBreakStyle(context: eslint.Rule.RuleContext) {
-  const text = context.getSourceCode().getText();
-
-  if (!text) {
-    return '\n';
-  }
-
   // pattern ripped from eslint/shared/ast-utils
-  const pattern = /\r\n|[\r\n\u2028\u2029]/u;
-  const matches = pattern.exec(text);
-  if (!matches) {
-    return '\n';
-  }
-
-  return matches[0];
+  const matches = /\r\n|[\r\n\u2028\u2029]/u.exec(context.getSourceCode().getText());
+  return matches ? matches[0] : '\n';
 }
 
 export interface CommentLine {
