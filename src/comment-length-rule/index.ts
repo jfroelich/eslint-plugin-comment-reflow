@@ -1,7 +1,5 @@
 import assert from 'assert';
 import eslint from 'eslint';
-// @ts-expect-error eslint does not type this since not exposed
-import astutil from 'eslint/lib/rules/utils/ast-utils';
 import estree from 'estree';
 
 export default <eslint.Rule.RuleModule>{
@@ -145,8 +143,9 @@ export function sniffLineBreakStyle(context: eslint.Rule.RuleContext) {
     return '\n';
   }
 
-  const { LINEBREAK_MATCHER } = <{ LINEBREAK_MATCHER: RegExp; }>astutil;
-  const matches = LINEBREAK_MATCHER.exec(text);
+  // pattern ripped from eslint/shared/ast-utils
+  const pattern = /\r\n|[\r\n\u2028\u2029]/u;
+  const matches = pattern.exec(text);
   if (!matches) {
     return '\n';
   }
