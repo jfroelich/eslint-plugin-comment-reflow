@@ -8,8 +8,7 @@ export default <eslint.Rule.RuleModule>{
     type: 'layout',
     fixable: 'whitespace',
     messages: {
-      split: 'Line {{line}} should break at column {{column}}.',
-      merge: 'Line {{line}} should be merged with previous line.'
+      reflow: 'Comment(s) starting on {{line}} needs reflow.'
     }
   },
   create: createCommentLengthRule
