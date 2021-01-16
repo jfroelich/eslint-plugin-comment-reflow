@@ -13,17 +13,6 @@ export default <eslint.Rule.RuleModule>{
   create: createCommentLengthRule
 };
 
-export interface Group {
-  type: 'block' | 'line';
-  lines: GroupLine[];
-}
-
-export interface GroupLine {
-  comment: estree.Comment;
-  index: number;
-  text: string;
-}
-
 function createCommentLengthRule(context: eslint.Rule.RuleContext) {
   return {
     Program: function(/*node: estree.Node*/) {
@@ -42,13 +31,16 @@ function analyzeProgram(ruleContext: eslint.Rule.RuleContext/*, node: estree.Nod
 
   const code = ruleContext.getSourceCode();
   const comments = code.getAllComments();
-  const candidates = comments.filter(isCandidateComment, ruleContext);
+  const candidates = comments.filter(isAnalyzableComment, ruleContext);
   const groups = groupComments(ruleContext, candidates);
-  const descriptors = analyzeGroups(ruleContext, groups);
-  descriptors.forEach(descriptor => ruleContext.report(descriptor));
+  const lineBreakStyle = sniffLineBreakStyle(ruleContext);
+
+  for (const group of groups) {
+    analyzeGroup(ruleContext, lineBreakStyle, group);
+  }
 }
 
-function isCandidateComment(this: eslint.Rule.RuleContext, comment: estree.Comment) {
+function isAnalyzableComment(this: eslint.Rule.RuleContext, comment: estree.Comment) {
   if (comment.type !== 'Block' && comment.type !== 'Line') {
     return false;
   }
@@ -67,6 +59,17 @@ function isCandidateComment(this: eslint.Rule.RuleContext, comment: estree.Comme
   }
 
   return true;
+}
+
+interface Group {
+  type: 'block' | 'line';
+  lines: GroupLine[];
+}
+
+interface GroupLine {
+  comment: estree.Comment;
+  index: number;
+  text: string;
 }
 
 function groupComments(context: eslint.Rule.RuleContext, comments: estree.Comment[]) {
@@ -105,36 +108,68 @@ function groupComments(context: eslint.Rule.RuleContext, comments: estree.Commen
   return groups;
 }
 
-export function analyzeGroups(ruleContext: eslint.Rule.RuleContext, groups: Group[]) {
-  const lineBreakStyle = sniffLineBreakStyle(ruleContext);
-  console.log('line break "%s"', lineBreakStyle.replace(/\r/g, '\\r').replace(/\n/g, '\\n'));
+/**
+ * Analyze a comment group to determine whether a linting error should be reported along with a fix
+ * that will rewrite the comment group such that it no longer violates the rule. While a comment
+ * group might contain multiple linting errors, we only create one report for the whole group. This
+ * avoids issues with generating overlapping errors per comment.
+ *
+ * We want to use an online algorithm. This means we do not want a bunch of greedy loops and parsing
+ * and "look ahead". We want this this to work as if it was processing an input stream of file lines
+ * and only was aware of a recently observed lines and the last line of a group where it was decided
+ * a group terminated.
+ *
+ * We want to defer parsing until it is actually needed. While it would be trivial to simply parse
+ * each line, make a change, then re-parse all the lines again, make another change, and so on, that
+ * is a lot of redundant parsing. Parsing is expensive. So, while we allowed the buffer of lines in
+ * the group to accumulate, we want a second online algorithm that iterates over the lines, seeing
+ * only the previous line.
+ *
+ * Unlike before, we do not generate a report each time we reach a decision to split a line or merge
+ * two lines. Instead, we simply keep track of a count of the number of revisions made to a comment
+ * group. At the end, if the revision counter is not 0, that means there is an error. Each time we
+ * make a revision, we revise the group. We introduce new lines when splitting. We remove lines when
+ * merging. So the line group is mutated as the algorith progresses through the lines. The entire
+ * comment line group is replaced as a result of the fix. The replacement text is the modified
+ * line text of each line in the group.
+ *
+ * There are a couple ways the algorithm could work. I think initially the approach is as follows.
+ * Iterate over the lines of the group. For a line, check if it should be split. If it should be
+ * split, split it. Increment the revision count. Advance to the next line. If it should not be
+ * split, check if it should be merged. If it should be merged, merge it. Reparse the lines? Then
+ * reprocess the next line because it may need to be split. If it does not need to be merged, then
+ * advance to the next line. When finished iterating over the lines, check the revision count. If it
+ * is more than 0, report an error and its fix.
+ */
+function analyzeGroup(ruleContext: eslint.Rule.RuleContext, _lineBreakStyle: string, group: Group) {
+  const revisionCount = 0;
 
-  const reports: eslint.Rule.ReportDescriptor[] = [];
-  for (const group of groups) {
-    const report = analyzeGroup(group);
-    if (report) {
-      reports.push(report);
+  // Compute the error location. This is what get highlighted in the editor. We highlight the entire
+  // comment. We do this before mutation since the lines may change. We are excluding the leading
+  // text on the line preceding the group and the trailing text on the line following the group.
+
+  const errorLocation = <eslint.AST.SourceLocation>{
+    start: {
+      line: group.lines[0].index,
+      column: group.lines[0].comment.loc.start.column
+    },
+    end: {
+      line: group.lines[group.lines.length - 1].index,
+      column: group.lines[group.lines.length - 1].comment.loc.end.column
     }
-  }
+  };
 
-  return reports;
-}
+  // Compute the replacement text range when applying a fix. We will be replacing the entire group,
+  // including the syntax. This may be trivially derived from the report location, but for now, it
+  // is computed separately. This could be deferred until later but for now it is precomputed. Keep
+  // in mind that unlike before, we are counting the open and close syntax of the comment.
 
-function analyzeGroup(group: Group) {
-  // TODO: we want to generate one report for a group, which could either be one or several
-  // comments. we want to look for all the splits and merges and iteratively perform them until
-  // nothing changed. then, if anything changed, return a report. so, unlike before, each individual
-  // merge or split analysis is not generating its own report. it is generating its own replacement
-  // text repeatedly. each time the text changes we have to parse some of it again (?).
+  const replacementRange = <eslint.AST.Range>[
+    ruleContext.getSourceCode().getIndexFromLoc(errorLocation.start),
+    ruleContext.getSourceCode().getIndexFromLoc(errorLocation.end)
+  ];
 
-  // we want to analyze splits from the top down, then analyze merges from the top down. this way we
-  // move text down once, then move text up once, which is the least amount of changes to make.
-
-  // Track whether we made any changes
-  // eslint-disable-next-line prefer-const
-  let dirtied = false;
-
-  // Analyze splits.
+  // TODO: this is undergoing revision
 
   let groupLineIndex = 0;
   while (true) {
@@ -148,8 +183,18 @@ function analyzeGroup(group: Group) {
     }
   }
 
-  const descriptor: eslint.Rule.ReportDescriptor = null;
-  return dirtied ? descriptor : null;
+  if (revisionCount < 1) {
+    return;
+  }
+
+  // TEMP: just marking the variable "in use"
+  console.log('replacement range:', replacementRange);
+
+  const descriptor = <eslint.Rule.ReportDescriptor>{
+    loc: errorLocation
+  };
+
+  ruleContext.report(descriptor);
 }
 
 export function sniffLineBreakStyle(context: eslint.Rule.RuleContext) {
