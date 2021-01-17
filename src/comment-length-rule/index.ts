@@ -15,13 +15,13 @@ export default <eslint.Rule.RuleModule>{
 
 function createCommentLengthRule(context: eslint.Rule.RuleContext) {
   return {
-    Program: function(/*node: estree.Node*/) {
-      return analyzeProgram(context/*, node*/);
+    Program: function(node: estree.Node) {
+      return analyzeProgram(node, context);
     }
   };
 }
 
-function analyzeProgram(ruleContext: eslint.Rule.RuleContext/*, node: estree.Node*/) {
+function analyzeProgram(node: estree.Node, ruleContext: eslint.Rule.RuleContext) {
   let maxLineLength = 80;
   if (ruleContext.options && ruleContext.options.length) {
     maxLineLength = <number>ruleContext.options[0];
@@ -36,7 +36,7 @@ function analyzeProgram(ruleContext: eslint.Rule.RuleContext/*, node: estree.Nod
   const lineBreakStyle = sniffLineBreakStyle(ruleContext);
 
   for (const group of groups) {
-    analyzeGroup(ruleContext, lineBreakStyle, group);
+    analyzeGroup(node, ruleContext, lineBreakStyle, group, maxLineLength);
   }
 }
 
@@ -141,7 +141,10 @@ function groupComments(context: eslint.Rule.RuleContext, comments: estree.Commen
  * advance to the next line. When finished iterating over the lines, check the revision count. If it
  * is more than 0, report an error and its fix.
  */
-function analyzeGroup(ruleContext: eslint.Rule.RuleContext, _lineBreakStyle: string, group: Group) {
+function analyzeGroup(node: estree.Node, ruleContext: eslint.Rule.RuleContext,
+  lineBreakStyle: string, group: Group, threshold: number) {
+  const startingLine = group.lines[0].index;
+
   const revisionCount = 0;
 
   // Compute the error location. This is what get highlighted in the editor. We highlight the entire
@@ -170,29 +173,165 @@ function analyzeGroup(ruleContext: eslint.Rule.RuleContext, _lineBreakStyle: str
   ];
 
   let previous: CommentLine;
+  let inMarkdown = false;
+  let inJSDocExample = false;
+
   for (let i = 0; i < group.lines.length; i++) {
+    let exitedMarkdownFence = false;
+
     const current = parseLine(group, group.lines[i], i);
 
-    console.log('current:', current);
+    if (group.type === 'block') {
+      if (inMarkdown) {
+        if (i > 0 && current.content.startsWith('```')) {
+          inMarkdown = false;
+          exitedMarkdownFence = true;
+        }
+      } else if (inJSDocExample) {
+        if (current.content.startsWith('@')) {
+          if (!current.content.startsWith('@example')) {
+            console.log('exiting jsdoc example');
+            inJSDocExample = false;
+          }
+        } else if (i + 1 === group.lines.length) {
+          inJSDocExample = false;
+        }
+      } else if (i > 0 && current.content.startsWith('```')) {
+        inMarkdown = true;
+      } else if (i > 0 && current.content.startsWith('@example')) {
+        inJSDocExample = true;
+      }
+    }
+
+    if (!inMarkdown && !exitedMarkdownFence && !inJSDocExample) {
+      split(group, current, threshold);
+    }
 
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     previous = current;
   }
 
-  //console.log('previous:', previous);
+  console.debug('revision count:', revisionCount);
 
   if (revisionCount < 1) {
     return;
   }
 
-  // TEMP: just marking the variable "in use"
-  console.log('replacement range:', replacementRange);
+  let replacementText = '';
+  replacementText += group.type === 'block' ? '/*' : '//';
+  replacementText += group.lines.join(lineBreakStyle);
+  replacementText += group.type === 'block' ? '*/' : '';
+
+  console.debug('replacement text "%s"', replacementText.replace('\n', '\\n'));
 
   const descriptor = <eslint.Rule.ReportDescriptor>{
-    loc: errorLocation
+    node,
+    loc: errorLocation,
+    messageId: 'reflow',
+    data: {
+      line: `${startingLine}`
+    },
+    fix: function (fixer) {
+      return fixer.replaceTextRange(replacementRange, replacementText);
+    }
   };
 
   ruleContext.report(descriptor);
+}
+
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+export function split(group: Group, current: CommentLine, threshold: number) {
+  console.log('checking for split:', current.text);
+
+  // TODO: the comments were helpful, i cannot remember half of what was going on
+
+  if (current.text.length <= threshold) {
+    return;
+  }
+
+  if (current.lead_whitespace.length >= threshold) {
+    return;
+  }
+
+  if (endIndexOf(current, 'open') >= threshold) {
+    return;
+  }
+
+  if (endIndexOf(current, 'prefix') >= threshold) {
+    return;
+  }
+
+  if (current.index + 1 < group.lines.length && endIndexOf(current, 'content') <= threshold) {
+    return;
+  }
+
+  if (current.index + 1 === group.lines.length && endIndexOf(current, 'close') <= threshold) {
+    return;
+  }
+
+  // TODO: i think we need to store revision count in group so we can adjust it here? either that
+  // or put it in some kind of shared state.
+
+  /*
+
+  // Handle a peculiar edge case of trailing whitespace. It is possible that the current line's text
+  // is visibly under the limit, but the trailing whitespace pushes the end position of the current
+  // line's text over the limit. This only applies when the whitespace is not visibly part of the
+  // content, meaning that this applies to all situations other than the final line of a block
+  // comment because that is the only situation where there is closing syntax.
+
+  if ((current.comment.type === 'Line' || current.index !== current.comment.loc.end.line) &&
+    endIndexOf(current, 'content') <= threshold && endIndexOf(current, 'suffix') > threshold) {
+    return;
+  }
+
+  if (current.directive) {
+    return;
+  }
+
+  if (current.comment.type === 'Block' && current.prefix.startsWith('*') &&
+    current.markup.startsWith('@see')) {
+    return;
+  }
+
+  const tokens = tokenize(current.content);
+  const tokenSplitIndex = findTokenSplit(current, tokens);
+  const contentBreakpoint = findContentBreak(current, tokens, tokenSplitIndex);
+  const lineBreakpoint = findLineBreak(current, tokenSplitIndex, contentBreakpoint);
+  const replacementText = composeReplacementText(current, contentBreakpoint, next);
+
+  // For a split, we always draw squigglies under the entire current line. Even though we might be
+  // replacing text in the next line when fixing the issue. I guess location and replacement range
+  // are not required to be equal?
+
+  const loc = <eslint.AST.SourceLocation>{
+    start: {
+      line: current.index,
+      column: 0
+    },
+    end: {
+      line: current.index,
+      column: endIndexOf(current, 'close')
+    }
+  };
+
+  const range = createReplacementRange(current, lineBreakpoint, next);
+
+  const report: eslint.Rule.ReportDescriptor = {
+    node: current.context.node,
+    loc,
+    messageId: 'split',
+    data: {
+      line: `${current.index}`,
+      column: `${lineBreakpoint}`
+    },
+    fix: function (fixer) {
+      return fixer.replaceTextRange(range, replacementText);
+    }
+  };
+
+  return report;
+  */
 }
 
 export function sniffLineBreakStyle(context: eslint.Rule.RuleContext) {
