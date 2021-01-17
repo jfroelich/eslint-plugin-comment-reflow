@@ -169,19 +169,17 @@ function analyzeGroup(ruleContext: eslint.Rule.RuleContext, _lineBreakStyle: str
     ruleContext.getSourceCode().getIndexFromLoc(errorLocation.end)
   ];
 
-  // TODO: this is undergoing revision
+  let previous: CommentLine;
+  for (let i = 0; i < group.lines.length; i++) {
+    const current = parseLine(group, group.lines[i], i);
 
-  let groupLineIndex = 0;
-  while (true) {
-    const groupLine = group.lines[groupLineIndex];
-    const lineDesc = parseLine(group, groupLine, groupLineIndex);
-    console.log(lineDesc);
+    console.log('current:', current);
 
-    groupLineIndex++;
-    if (groupLineIndex === group.lines.length) {
-      break;
-    }
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    previous = current;
   }
+
+  //console.log('previous:', previous);
 
   if (revisionCount < 1) {
     return;
@@ -204,13 +202,6 @@ export function sniffLineBreakStyle(context: eslint.Rule.RuleContext) {
 }
 
 export interface CommentLine {
-  /**
-   * Reference to comment that contains the line.
-   *
-   * @see https://eslint.org/docs/developer-guide/working-with-custom-parsers#all-nodes
-   */
-  comment: estree.Comment;
-
   /**
    * The ESLint line index, which is 1-based. This should not be confused with some kind of index
    * into an array of lines for a comment. This is the global index for the entire file.
@@ -338,107 +329,78 @@ export function endIndexOf(line: CommentLine, region: Region) {
 }
 
 /**
- * @todo cannot use original eslint comment location values any more since we are mutating the text
- * during analysis and re-analyzing mutated text. so we need to figure this stuff out dynamically
- * repeatedly, this is the next todo. also, do not forget the helpers to this function.
+ * @param group the group containing the line being parsed
+ * @param groupLine the group line referring to the unparsed line and comment
+ * @param index the index of the line in the group's lines
  */
-export function parseLine(group: Group, groupLine: GroupLine, groupLineIndex: number) {
+export function parseLine(group: Group, groupLine: GroupLine, index: number) {
   const line = <CommentLine>{};
-  line.comment = groupLine.comment;
+  line.index = index;
   line.text = groupLine.text;
 
-  const textTrimmedStart = line.text.trimStart();
-  line.lead_whitespace = line.text.slice(0, line.text.length - textTrimmedStart.length);
-
   if (group.type === 'line') {
-    line.open = '//';
+    const parts = /^(\s*)(\/\/)(\s*)(.*)/.exec(line.text);
+    line.lead_whitespace = parts[1];
+    line.open = parts[2];
+    line.prefix = parts[3];
+    line.content = parts[4].trimEnd();
+    line.suffix = parts[4].slice(line.content.length);
     line.close = '';
-
-    // TODO: support triple slashes, treat the 3rd slash a part of the prefix, and upon making this
-    // change make sure to fix the typescript <reference> check in line-comment handlers
-
-    const afterOpen = line.text.slice(line.lead_whitespace.length + line.open.length);
-    const afterOpenTrimStart = afterOpen.trimStart();
-    const afterOpenSpaceLen = afterOpen.length - afterOpenTrimStart.length;
-    line.prefix = line.text.slice(line.lead_whitespace.length + line.open.length,
-      line.lead_whitespace.length + line.open.length + afterOpenSpaceLen);
-    line.content = line.text.slice(line.lead_whitespace.length + line.open.length +
-      line.prefix.length).trimEnd();
-    line.suffix = line.text.slice(line.lead_whitespace.length + line.open.length +
-      line.prefix.length + line.content.length);
   } else if (group.type === 'block') {
     if (group.lines.length === 1) {
-      line.open = '/*';
-      line.close = '*/';
-      const prefixHaystack = line.text.slice(line.lead_whitespace.length + line.open.length,
-        groupLine.comment.loc.end.column - line.close.length);
-      const prefixMatch = /^\**\s*/.exec(prefixHaystack);
-      line.prefix = prefixMatch ? prefixMatch[0] : '';
-      line.content = line.text.slice(line.lead_whitespace.length + line.open.length +
-        line.prefix.length, groupLine.comment.loc.end.column - line.close.length).trimEnd();
-      line.suffix = line.text.slice(
-        line.lead_whitespace.length + line.open.length + line.prefix.length + line.content.length,
-        groupLine.comment.loc.end.column - line.close.length
-      );
-    } else if (groupLineIndex === 0) {
-      line.open = '/*';
+      const parts = /^(\s*)(\/\*)(\*?\s*)(.*)(\*\/)/.exec(line.text);
+      line.lead_whitespace = parts[1];
+      line.open = parts[2];
+      line.prefix = parts[3];
+      line.content = parts[4].trimEnd();
+      line.suffix = parts[4].slice(line.content.length);
+      line.close = parts[5];
+    } else if (index === 0) {
+      const parts = /^(\s*)(\/\*)(\*?\s*)(.*)/.exec(line.text);
+      line.lead_whitespace = parts[1];
+      line.open = parts[2];
+      line.prefix = parts[3];
+      line.content = parts[4].trimEnd();
+      line.suffix = parts[4].slice(line.content.length);
       line.close = '';
-      const prefixHaystack = line.text.slice(line.lead_whitespace.length + line.open.length);
-      const prefixMatch = /^\*+\s*/.exec(prefixHaystack);
-      line.prefix = prefixMatch ? prefixMatch[0] : '';
-      line.content = line.text.slice(line.lead_whitespace.length + line.open.length +
-        line.prefix.length).trimEnd();
-      line.suffix = line.text.slice(line.lead_whitespace.length + line.open.length +
-        line.prefix.length + line.content.length);
-    } else if (groupLineIndex === group.lines.length - 1) {
+    } else if (index === group.lines.length - 1) {
+      const parts = /^(\s*)(\*?\s*)(.*)(\*\/)/.exec(line.text);
+      line.lead_whitespace = parts[1];
       line.open = '';
-      line.close = '*/';
-      const prefixHaystack = line.text.slice(line.lead_whitespace.length,
-        groupLine.comment.loc.end.column - line.close.length);
-      const prefixMatch = /^\*\s+/.exec(prefixHaystack);
-      line.prefix = prefixMatch ? prefixMatch[0] : '';
-      line.content = line.text.slice(line.lead_whitespace.length + line.open.length +
-        line.prefix.length, groupLine.comment.loc.end.column - line.close.length).trimEnd();
-      line.suffix = line.text.slice(
-        line.lead_whitespace.length + line.open.length + line.prefix.length + line.content.length,
-        groupLine.comment.loc.end.column - line.close.length
-      );
+      line.prefix = parts[2];
+      line.content = parts[3].trimEnd();
+      line.suffix = parts[3].slice(line.content.length);
+      line.close = parts[4];
     } else {
+      const parts = /^(\s*)(\*?\s*)(.*)/.exec(line.text);
+      line.lead_whitespace = parts[1];
       line.open = '';
+      line.prefix = parts[2];
+      line.content = parts[3].trimEnd();
+      line.suffix = parts[3].slice(line.content.length);
       line.close = '';
-      const prefixMatch = /^\*\s+/.exec(textTrimmedStart);
-      line.prefix = prefixMatch ? prefixMatch[0] : '';
-      line.content = line.text.slice(line.lead_whitespace.length + line.open.length +
-        line.prefix.length).trimEnd();
-      line.suffix = line.text.slice(line.lead_whitespace.length + line.open.length +
-        line.prefix.length + line.content.length);
     }
   }
 
-  const [markup, markupSpace] = parseMarkup(line);
-  line.markup = markup;
-  line.markup_space = markupSpace;
+  if (group.type === 'block') {
+    const [markup, markupSpace] = parseMarkup(line);
+    line.markup = markup;
+    line.markup_space = markupSpace;
+  }
 
-  line.directive = parseDirective(line);
-  line.fixme = parseFixme(line.content);
+  line.directive = parseDirective(group, line);
+
+  const fixmes = /^(fix|fixme|todo|note|bug|warn|warning|hack|todo\([^)]*\))(:)/is.exec(
+    line.content
+  );
+  if (fixmes) {
+    line.fixme = fixmes[1];
+  }
 
   return line;
 }
 
-/**
- * Parses the content for markup. Returns an array where the first element is some of the markup
- * and the second is trailing whitespace if any. This focuses on markdown but it can also match
- * jsdoc.
- *
- * @todo consider creating a jsdoc prop and a markdown prop and not mixing the two.
- */
 function parseMarkup(line: CommentLine) {
-  // Only recognize markup in block comments.
-  if (line.comment.type !== 'Block') {
-    return ['', ''];
-  }
-
-  // Only recognize markup in javadoc comments
   if (!line.prefix.startsWith('*')) {
     return ['', ''];
   }
@@ -447,24 +409,15 @@ function parseMarkup(line: CommentLine) {
     return ['', ''];
   }
 
-  // For jsdoc tags, we cannot require a trailing space, so for simplicitly this is a separate
-  // regex test than the markdown pattern. Might combine in the future for perf.
-
   const jsdocMatches = /^(@[a-zA-Z]+)(\s*)/.exec(line.content);
-  if (jsdocMatches && jsdocMatches.length) {
+  if (jsdocMatches) {
     return [jsdocMatches[1], jsdocMatches[2] ? jsdocMatches[2] : ''];
   }
 
-  // TODO: markdown horizontal rules
-  // TODO: indented lists (we might already support this because whitespace in prefix)
-
-  const matches = /^([*-]|\d+\.|#{1,6})(\s+)/.exec(line.content);
-  if (matches && matches.length === 3) {
-    return [matches[1], matches[2]];
+  const listMatches = /^([*-]|\d+\.|#{1,6})(\s+)/.exec(line.content);
+  if (listMatches) {
+    return [listMatches[1], listMatches[2]];
   }
-
-  // markdown table parsing, this probably could be written better
-  // TODO: support trailing space
 
   if (/^\|.+\|$/.test(line.content)) {
     return [line.content, ''];
@@ -473,142 +426,21 @@ function parseMarkup(line: CommentLine) {
   return ['', ''];
 }
 
-function parseDirective(line: CommentLine) {
-  if (line.content.length === 0) {
-    return '';
+export function parseDirective(group: Group, line: CommentLine) {
+  if (line.index === 0) {
+    const matches = /^(globals?\s|jslint\s|tslint:\s|property\s|eslint\s|jshint\s|istanbul\s|jscs\s|eslint-env|eslint-disable|eslint-enable|eslint-disable-next-line|eslint-disable-line|exported|@ts-check|@ts-nocheck|@ts-ignore|@ts-expect-error)/.exec(line.content);
+    if (matches) {
+      return matches[1].trimEnd();
+    }
   }
 
-  if (line.index === line.comment.loc.start.line && !line.prefix.startsWith('*') &&
-    line.content.startsWith('tslint:')) {
-    return 'tslint';
-  }
-
-  if (line.index === line.comment.loc.start.line && line.content.startsWith('global ')) {
-    return 'global';
-  }
-
-  if (line.index === line.comment.loc.start.line && line.content.startsWith('globals ')) {
-    return 'globals';
-  }
-
-  if (line.index === line.comment.loc.start.line && line.content.startsWith('jslint ')) {
-    return 'jslint';
-  }
-
-  if (line.index === line.comment.loc.start.line && line.content.startsWith('property ')) {
-    return 'property';
-  }
-
-  if (line.index === line.comment.loc.start.line && line.content.startsWith('eslint ')) {
-    return 'eslint';
-  }
-
-  if (line.content.startsWith('jshint ')) {
-    return 'jshint';
-  }
-
-  if (line.content.startsWith('istanbul ')) {
-    return 'istanbul';
-  }
-
-  if (line.content.startsWith('jscs ')) {
-    return 'jscs';
-  }
-
-  if (line.content.startsWith('eslint-env')) {
-    return 'eslint-env';
-  }
-
-  if (line.content.startsWith('eslint-disable')) {
-    return 'eslint-disable';
-  }
-
-  if (line.content.startsWith('eslint-enable')) {
-    return 'eslint-enable';
-  }
-
-  if (line.content.startsWith('eslint-disable-next-line')) {
-    return 'eslint-disable-next-line';
-  }
-
-  if (line.content.startsWith('eslint-disable-line')) {
-    return 'eslint-disable-line';
-  }
-
-  if (line.content.startsWith('exported')) {
-    return 'exported';
-  }
-
-  if (line.content.startsWith('@ts-check')) {
-    return '@ts-check';
-  }
-
-  if (line.content.startsWith('@ts-nocheck')) {
-    return '@ts-nocheck';
-  }
-
-  if (line.content.startsWith('@ts-ignore')) {
-    return '@ts-ignore';
-  }
-
-  if (line.content.startsWith('@ts-expect-error')) {
-    return '@ts-expect-error';
-  }
-
-  if (line.comment.type === 'Line' && /^\/\s*<(reference|amd)/.test(line.content)) {
+  if (group.type === 'line' && /^\/\s*<(reference|amd)/.test(line.content)) {
     return line.content.slice(1).trimLeft();
   }
 
   return '';
 }
 
-/**
- * @todo regex
- * @todo do we indent the text on overflow? if so we need to figure out the indent level.
- */
-function parseFixme(content: string) {
-  if (content.startsWith('FIXME: ')) {
-    return 'FIXME';
-  }
-
-  if (content.startsWith('TODO: ')) {
-    return 'TODO';
-  }
-
-  if (content.startsWith('NOTE: ')) {
-    return 'NOTE';
-  }
-
-  if (content.startsWith('BUG: ')) {
-    return 'BUG';
-  }
-
-  if (content.startsWith('WARN: ')) {
-    return 'WARN';
-  }
-
-  if (content.startsWith('WARNING: ')) {
-    return 'WARNING';
-  }
-
-  if (content.startsWith('HACK: ')) {
-    return 'HACK';
-  }
-
-  // if (/^todo\(?.+\)?\:|warn\:|hack\:/i.test(currentLine.content)) {
-  //   return;
-  // }
-
-  if (content.startsWith('TODO(')) {
-    return 'TODO';
-  }
-
-  return '';
-}
-
-/**
- * Split a string into an array of word, hyphen, and space tokens.
- */
 export function tokenize(string: string) {
   const matches = string.matchAll(/[^\s-]+|(?:\s+|-)/g);
   const tokens: string[] = [];
@@ -620,7 +452,7 @@ export function tokenize(string: string) {
   return tokens;
 }
 
-export function isLeadWhitespaceAligned(current: CommentLine, next?: CommentLine) {
+export function isLeadWhitespaceAligned(group: Group, current: CommentLine, next?: CommentLine) {
   // When there is no next line, there is no misalignment concern, so report aligned.
   if (!next) {
     return true;
@@ -633,9 +465,9 @@ export function isLeadWhitespaceAligned(current: CommentLine, next?: CommentLine
   // fall through to requiring exact equality. In the non-javadoc case, everything is always aligned
   // because lead whitespace is a part of the content and not treated as lead whitespace.
 
-  if (current.comment.type === 'Block') {
+  if (group.type === 'block') {
     if (current.prefix.startsWith('*')) {
-      if (current.index === current.comment.loc.start.line) {
+      if (current.index === 0) {
         return next.lead_whitespace.length - current.lead_whitespace.length === 1;
       } else {
         // FALL THROUGH
@@ -648,11 +480,11 @@ export function isLeadWhitespaceAligned(current: CommentLine, next?: CommentLine
   return current.lead_whitespace.length === next.lead_whitespace.length;
 }
 
-export function containsMarkdownList(line: CommentLine) {
-  return line.comment.type === 'Block' && (line.markup.startsWith('*') ||
-    line.markup.startsWith('-') || /^\d/.test(line.markup));
+export function containsMarkdownList(group: Group, line: CommentLine) {
+  return group.type === 'block' && (line.markup.startsWith('*') || line.markup.startsWith('-') ||
+    /^\d/.test(line.markup));
 }
 
-export function containsJSDocTag(line: CommentLine) {
-  return line.comment.type === 'Block' && line.markup.startsWith('@');
+export function containsJSDocTag(group: Group, line: CommentLine) {
+  return group.type === 'block' && line.markup.startsWith('@');
 }
