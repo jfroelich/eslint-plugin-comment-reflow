@@ -203,8 +203,7 @@ export function sniffLineBreakStyle(context: eslint.Rule.RuleContext) {
 
 export interface CommentLine {
   /**
-   * The ESLint line index, which is 1-based. This should not be confused with some kind of index
-   * into an array of lines for a comment. This is the global index for the entire file.
+   * The line number in the group. 0 based.
    */
   index: number;
 
@@ -247,6 +246,9 @@ export interface CommentLine {
    * formatted comment line in the middle of the comment, this might include a leading asterisk
    * followed by some whitespace. For the first line of a javadoc comment, this will include the
    * second asterisk as its first character.
+   *
+   * For a non-first line block comment line, a prefix without an asterisk will be empty and all
+   * space is taken by the lead whitespace.
    */
   prefix: string;
 
@@ -290,41 +292,38 @@ export interface CommentLine {
 type Region = keyof Pick<CommentLine,
   'lead_whitespace' | 'open' | 'close' | 'prefix' | 'content' | 'suffix' | 'close'>;
 
-/**
- * Returns the length of the text in the given line up to the end of the given region.
- */
 export function endIndexOf(line: CommentLine, region: Region) {
   switch (region) {
-  case 'lead_whitespace': {
-    return line.lead_whitespace.length;
-  }
+    case 'lead_whitespace': {
+      return line.lead_whitespace.length;
+    }
 
-  case 'open': {
-    return line.lead_whitespace.length + line.open.length;
-  }
+    case 'open': {
+      return line.lead_whitespace.length + line.open.length;
+    }
 
-  case 'prefix': {
-    return line.lead_whitespace.length + line.open.length + line.prefix.length;
-  }
+    case 'prefix': {
+      return line.lead_whitespace.length + line.open.length + line.prefix.length;
+    }
 
-  case 'content': {
-    return line.lead_whitespace.length + line.open.length + line.prefix.length +
+    case 'content': {
+      return line.lead_whitespace.length + line.open.length + line.prefix.length +
         line.content.length;
-  }
+    }
 
-  case 'suffix': {
-    return line.lead_whitespace.length + line.open.length + line.prefix.length +
+    case 'suffix': {
+      return line.lead_whitespace.length + line.open.length + line.prefix.length +
         line.content.length + line.suffix.length;
-  }
+    }
 
-  case 'close': {
-    return line.lead_whitespace.length + line.open.length + line.prefix.length +
+    case 'close': {
+      return line.lead_whitespace.length + line.open.length + line.prefix.length +
         line.content.length + line.suffix.length + line.close.length;
-  }
+    }
 
-  default: {
-    throw new Error(`Unknown/unsupported region "${<string>region}"`);
-  }
+    default: {
+      throw new Error(`Unknown/unsupported region "${<string>region}"`);
+    }
   }
 }
 
