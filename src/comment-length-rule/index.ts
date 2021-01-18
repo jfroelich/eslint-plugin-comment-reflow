@@ -67,7 +67,15 @@ interface Group {
 }
 
 interface GroupLine {
+  /**
+   * @todo since we do things like insert a new line or possibly remove a comment, it was a mistake
+   * to store a comment per line. we should instead just have an array of strings.
+   */
   comment: estree.Comment;
+  /**
+   * @todo since we edit group lines (and remove and insert), it was a mistake to store the index
+   * inside the group line.
+   */
   index: number;
   text: string;
 }
@@ -204,7 +212,7 @@ function analyzeGroup(node: estree.Node, ruleContext: eslint.Rule.RuleContext,
     }
 
     if (!inMarkdown && !exitedMarkdownFence && !inJSDocExample) {
-      split(group, current, threshold);
+      split(group, current, threshold, lineBreakStyle);
     }
 
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -239,99 +247,256 @@ function analyzeGroup(node: estree.Node, ruleContext: eslint.Rule.RuleContext,
   ruleContext.report(descriptor);
 }
 
+/**
+ * TODO: i think we need to store revision count in group so we can adjust it here? either that or
+ * put it in some kind of shared state variable? more context?
+ */
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
-export function split(group: Group, current: CommentLine, threshold: number) {
-  console.log('checking for split:', current.text);
+export function split(group: Group, current: CommentLine, threshold: number, lineBreakStyle: string) {
+  // Ignore directives
+  if (current.directive) {
+    return;
+  }
 
-  // TODO: the comments were helpful, i cannot remember half of what was going on
-
+  // If the entire line, including syntax, excluding line breaks, is under threshold, ignore.
   if (current.text.length <= threshold) {
     return;
   }
 
+  // If the content starts after the threshold, ignore.
   if (current.lead_whitespace.length >= threshold) {
     return;
   }
 
+  // If the content starts after the thresold, ignore.
   if (endIndexOf(current, 'open') >= threshold) {
     return;
   }
 
+  // If the content starts after the thresold, ignore. Fixing this would require changing the
+  // whitespace, which is ambiguous.
   if (endIndexOf(current, 'prefix') >= threshold) {
     return;
   }
 
+  // If the current content is not the last line of the comment and under threshold, ignore.
   if (current.index + 1 < group.lines.length && endIndexOf(current, 'content') <= threshold) {
     return;
   }
 
+  // If the current is the last line, and the text including the suffix and close is under the
+  // threshold, ignore.
   if (current.index + 1 === group.lines.length && endIndexOf(current, 'close') <= threshold) {
     return;
   }
-
-  // TODO: i think we need to store revision count in group so we can adjust it here? either that
-  // or put it in some kind of shared state.
-
-  /*
 
   // Handle a peculiar edge case of trailing whitespace. It is possible that the current line's text
   // is visibly under the limit, but the trailing whitespace pushes the end position of the current
   // line's text over the limit. This only applies when the whitespace is not visibly part of the
   // content, meaning that this applies to all situations other than the final line of a block
   // comment because that is the only situation where there is closing syntax.
-
-  if ((current.comment.type === 'Line' || current.index !== current.comment.loc.end.line) &&
+  if ((group.type === 'line' || current.index + 1 < group.lines.length) &&
     endIndexOf(current, 'content') <= threshold && endIndexOf(current, 'suffix') > threshold) {
     return;
   }
 
-  if (current.directive) {
-    return;
-  }
-
-  if (current.comment.type === 'Block' && current.prefix.startsWith('*') &&
+  // Ignore @see, because it tends to contain urls.
+  if (group.type === 'block' && current.prefix.startsWith('*') &&
     current.markup.startsWith('@see')) {
     return;
   }
 
+  // We should wrap the line.
+
+  // TODO: we no longer generate the line breaks. We just edit the current line and insert a new
+  // line after it (and before any subsequent lines). I don't think we even care about the line
+  // break style here.
+
   const tokens = tokenize(current.content);
-  const tokenSplitIndex = findTokenSplit(current, tokens);
-  const contentBreakpoint = findContentBreak(current, tokens, tokenSplitIndex);
-  const lineBreakpoint = findLineBreak(current, tokenSplitIndex, contentBreakpoint);
-  const replacementText = composeReplacementText(current, contentBreakpoint, next);
+  const tokenSplitIndex = findTokenSplit(group, current, tokens, threshold);
 
-  // For a split, we always draw squigglies under the entire current line. Even though we might be
-  // replacing text in the next line when fixing the issue. I guess location and replacement range
-  // are not required to be equal?
+  let contentBreakpoint = -1;
+  if (group.type === 'block' && current.index + 1 === group.lines.length &&
+    endIndexOf(current, 'content') <= threshold) {
+    contentBreakpoint = -1;
+  } else if (tokenSplitIndex === -1) {
+    contentBreakpoint = threshold - endIndexOf(current, 'prefix');
+  } else if (tokens[tokenSplitIndex].trim().length === 0) {
+    contentBreakpoint = tokens.slice(0, tokenSplitIndex + 1).join('').length;
+  } else {
+    contentBreakpoint = tokens.slice(0, tokenSplitIndex).join('').length;
+  }
 
-  const loc = <eslint.AST.SourceLocation>{
-    start: {
-      line: current.index,
-      column: 0
-    },
-    end: {
-      line: current.index,
-      column: endIndexOf(current, 'close')
+  // Determine the line break point.
+  let lineBreakpoint: number;
+  if (group.type === 'block' && current.index + 1 === group.lines.length &&
+    endIndexOf(current, 'content') <= threshold) {
+    lineBreakpoint = endIndexOf(current, 'content');
+  } else if (tokenSplitIndex === -1) {
+    lineBreakpoint = threshold;
+  } else {
+    lineBreakpoint = endIndexOf(current, 'prefix') + contentBreakpoint;
+  }
+
+  console.log('line breakpoint:', lineBreakpoint);
+
+  // revise the current line.
+
+  const newCurrentLine = current.text.slice(0, lineBreakpoint);
+  group.lines[current.index].text = newCurrentLine;
+
+  // TODO: build the new text to insert into the new next line
+
+  const newNextText = '';
+
+  group.lines.splice(current.index, 0, {
+    comment: null,
+    index: current.index + 1,
+    text: newNextText
+  });
+
+  // TODO: since we store index per line that means we need to shift all the later lines? or do we
+  // let the properties go out of sync?
+
+  // TODO: need to mark the group as dirtied, increment revision count.
+}
+
+function findTokenSplit(group: Group, current: CommentLine, tokens: string[], threshold: number) {
+  const endOfPrefix = endIndexOf(current, 'prefix');
+
+  let remaining = endIndexOf(current, 'content');
+  let tokenSplitIndex = -1;
+
+  // Edge case for trailing whitespace in last line of block comment.
+
+  if (group.type === 'block' && current.index + 1 === group.lines.length &&
+    remaining <= threshold) {
+    return - 1;
+  }
+
+  for (let i = tokens.length - 1; i > -1; i--) {
+    const token = tokens[i];
+
+    // If moving this content token to the next line would leave only the prefix remaining for the
+    // current line, it means that we parsed a token that starts immediately after the prefix,
+    // which only happens when there is one large token starting the content that itself causes
+    // the line to overflow. In this case we do not want to decrement remaining and we do not want
+    // to set the index as found. Keep in mind this may not have been the only token on the line,
+    // it is just the last visited one that no longer fits, so the index could either be -1 or
+    // some later index for some subsequent token that only starts after the threshold. We break
+    // here because we know there is no longer a point in looking at earlier tokens and that there
+    // are no other tokens so we want to avoid checking other things.
+
+    if (remaining - token.length === endOfPrefix) {
+      // we reset the index. if we ran into a big token at the start, it means we are going to
+      // have to hard break the token itself, and since later code relies on this, we want to
+      // ensure we report not found.
+      tokenSplitIndex = -1;
+      break;
     }
-  };
 
-  const range = createReplacementRange(current, lineBreakpoint, next);
+    // Handle those tokens that are positioned entirely after the threshold. Removing the tokens
+    // leading up to this token along with this token are not enough to find a split. We need to
+    // continue searching backward. Shift the index, since this is a token that will be moved.
+    // Update remaining, since this is a token that will be moved.
 
-  const report: eslint.Rule.ReportDescriptor = {
-    node: current.context.node,
-    loc,
-    messageId: 'split',
-    data: {
-      line: `${current.index}`,
-      column: `${lineBreakpoint}`
-    },
-    fix: function (fixer) {
-      return fixer.replaceTextRange(range, replacementText);
+    if (remaining - token.length > threshold) {
+      tokenSplitIndex = i;
+      remaining -= token.length;
+      continue;
     }
-  };
 
-  return report;
-  */
+    // Handle a token that crosses the threshold. Since we are iterating backward, we want to stop
+    // searching the first time this condition is true. This is the final token to move.
+
+    if (remaining - token.length <= threshold) {
+      tokenSplitIndex = i;
+      remaining -= token.length;
+      break;
+    }
+  }
+
+  // Account for soft break preceding hyphenated word.
+
+  if (tokenSplitIndex > 0 && tokens[tokenSplitIndex] === '-' &&
+    remaining - tokens[tokenSplitIndex - 1].length > endOfPrefix) {
+    tokenSplitIndex--;
+  }
+
+  return tokenSplitIndex;
+}
+
+/**
+ * @todo might deprecate since we are not doing an edit per error
+ */
+export function composeReplacementText(group: Group, lineBreak: string, contentBreakpoint: number,
+  threshold: number, current: CommentLine, next?: CommentLine) {
+  let replacementText = lineBreak + current.lead_whitespace;
+
+  if (group.type === 'line') {
+    replacementText += current.open;
+  }
+
+  // Vertically align the asterisk in the new line when splitting first line of javadoc since the
+  // lead whitespace by itself is not enough, all lines for proper javadoc other than the first have
+  // an extra leading space.
+
+  if (current.index === 0 && current.prefix.startsWith('*')) {
+    replacementText += ' ';
+  }
+
+  // Special case for last line of block comment where content under limit but suffix/close over
+  // limit
+
+  if (group.type === 'block' && current.index + 1 === group.lines.length &&
+    endIndexOf(current, 'content') <= threshold) {
+    return replacementText;
+  }
+
+  replacementText += current.prefix;
+  replacementText += current.content.slice(contentBreakpoint);
+
+  replacementText += current.suffix;
+
+  if (willSplitMerge(group, current, next)) {
+    // Keep the text moved from the current line into the next line separated from the existing text
+    // of the next line.
+    replacementText += ' ';
+  }
+
+  return replacementText;
+}
+
+function willSplitMerge(group: Group, current: CommentLine, next?: CommentLine) {
+  if (!next) {
+    return false;
+  }
+
+  if (!next.content) {
+    return false;
+  }
+
+  if (next.directive) {
+    return false;
+  }
+
+  if (next.fixme) {
+    return false;
+  }
+
+  if (!isLeadWhitespaceAligned(group, current, next)) {
+    return false;
+  }
+
+  if (containsMarkdownList(group, next)) {
+    return false;
+  }
+
+  if (containsJSDocTag(group, next)) {
+    return false;
+  }
+
+  return true;
 }
 
 export function sniffLineBreakStyle(context: eslint.Rule.RuleContext) {
