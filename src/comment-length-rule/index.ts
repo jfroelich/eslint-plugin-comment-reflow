@@ -7,21 +7,19 @@ export default <eslint.Rule.RuleModule>{
     type: 'layout',
     fixable: 'whitespace',
     messages: {
-      reflow: 'Comment(s) starting on {{line}} needs reflow.'
+      reflow: 'Comment line {{line}} needs reflow.'
     }
   },
   create: createCommentLengthRule
 };
 
 function createCommentLengthRule(context: eslint.Rule.RuleContext) {
-  return {
-    Program: function(node: estree.Node) {
-      return analyzeProgram(node, context);
-    }
+  return <eslint.Rule.RuleListener>{
+    Program: (program) => analyzeProgram(program, context)
   };
 }
 
-function analyzeProgram(node: estree.Node, ruleContext: eslint.Rule.RuleContext) {
+function analyzeProgram(program: estree.Program, ruleContext: eslint.Rule.RuleContext) {
   let maxLineLength = 80;
   if (ruleContext.options && ruleContext.options.length) {
     maxLineLength = <number>ruleContext.options[0];
@@ -36,7 +34,7 @@ function analyzeProgram(node: estree.Node, ruleContext: eslint.Rule.RuleContext)
   const lineBreakStyle = sniffLineBreakStyle(ruleContext);
 
   for (const group of groups) {
-    analyzeGroup(node, ruleContext, lineBreakStyle, group, maxLineLength);
+    analyzeGroup(program, ruleContext, lineBreakStyle, group, maxLineLength);
   }
 }
 
