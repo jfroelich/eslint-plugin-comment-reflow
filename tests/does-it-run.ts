@@ -14,7 +14,7 @@ tester.run('does-it-run', commentLengthRule, {
 // e
 // f
 
-// g
+     // indented g
 /* h 
 */
 whatever
