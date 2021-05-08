@@ -1,22 +1,25 @@
 import eslint from 'eslint';
 import commentLengthRule from '../src/comment-length-rule';
 
-// TODO: add more cases here, e.g. when hyphen is used to split, does hyphen end up on next line
-
 const tester = new eslint.RuleTester();
 
-tester.run('hyphen-line-split', commentLengthRule, {
-  valid: [],
+tester.run('simple-split-block', commentLengthRule, {
+  valid: [
+    {
+      code: '/*0123456789*/',
+      options: [20],
+    }
+  ],
   invalid: [
     {
-      code: '// TESTTESTT STTEST- B',
+      code: '/*01234567890123456789*/',
       options: [20],
       errors: [
         {
           messageId: 'split'
         }
       ],
-      output: '// TESTTESTT STTEST- \n// B'
+      output: '/*012345678901234567\n89*/'
     }
   ]
 });

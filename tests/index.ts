@@ -1,4 +1,5 @@
+import './does-it-run';
 import './hyphen';
 import './line-merge';
-import './split-simple';
+import './simple-split-line';
 import './trailing-whitespace';
