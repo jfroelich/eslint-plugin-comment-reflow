@@ -12,8 +12,7 @@
     "declaration": false,
     "removeComments": true,
     "noImplicitAny": true,
-    "strictNullChecks": false,
-    "watch": false
+    "strictNullChecks": false
   },
   "include": [
     "src",
