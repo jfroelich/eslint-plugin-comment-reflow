@@ -34,148 +34,354 @@ export default <eslint.Rule.RuleModule>{
   }
 };
 
+/**
+ * Scan the comments with a windowed buffer. Process each buffer as it ends. A buffer contains
+ * either one block comment or one or more contiguous line comments.
+ */
 function scan(state: ScanState) {
-  const sourceCode = state.context.getSourceCode();
-  const comments: estree.Comment[] = sourceCode.getAllComments();
-
-  // Sequentially buffer the comments and then process each buffer as it ends.
-
+  const code = state.context.getSourceCode();
+  const comments: estree.Comment[] = code.getAllComments();
   let buffer: estree.Comment[] = [];
 
-  for (let commentIndex = 0; commentIndex < comments.length; commentIndex++) {
-    const comment = comments[commentIndex];
-
+  for (const comment of comments) {
     if (comment.type === 'Block') {
-      processCommentBuffer(buffer, state);
+      handleBufferEnd(buffer, state);
       buffer = [];
 
-      const before = sourceCode.getTokenBefore(comment, { includeComments: true });
-      const after = sourceCode.getTokenAfter(comment, { includeComments: true });
+      const before = code.getTokenBefore(comment, { includeComments: true });
+      const after = code.getTokenAfter(comment, { includeComments: true });
       if ((!before || before.loc.end.line < comment.loc.start.line) &&
         (!after || after.loc.start.line > comment.loc.end.line)) {
         buffer.push(comment);
       }
     } else if (comment.type === 'Line') {
-      const before = sourceCode.getTokenBefore(comment, { includeComments: true });
+      const before = code.getTokenBefore(comment, { includeComments: true });
       if (before?.loc.end.line === comment.loc.start.line) {
-        processCommentBuffer(buffer, state);
+        handleBufferEnd(buffer, state);
         buffer = [];
       } else if (buffer.length && buffer[buffer.length - 1].type === 'Line' &&
         buffer[buffer.length - 1].loc.start.line === comment.loc.start.line - 1) {
         buffer.push(comment);
       } else {
-        processCommentBuffer(buffer, state);
+        handleBufferEnd(buffer, state);
         buffer = [];
         buffer.push(comment);
       }
     } else {
       // treat shebangs as buffer breaks
-      processCommentBuffer(buffer, state);
+      handleBufferEnd(buffer, state);
       buffer = [];
     }
   }
 
   // Flush the last buffer.
-  processCommentBuffer(buffer, state);
+  handleBufferEnd(buffer, state);
 }
 
-function processCommentBuffer(buffer: estree.Comment[], scanState: ScanState) {
+/**
+ * Analyze the lines of the buffer and check for lines that should be split or merged. Generate an 
+ * eslint report with a fix if any lines should change. We generate one report per group of comments
+ * because of eslint's issues with sequential fixes.
+ */
+function handleBufferEnd(buffer: estree.Comment[], scanState: ScanState) {
   if (buffer.length === 0) {
     return;
   }
 
-  // TODO: iterate over the lines of the buffer. for a line, decide to split a line into two lines
-  // or merge two lines into one. keep in mind we want to only parse as needed so as to minimize
-  // parsing. i think we do something like mutate the replacement text, and if any mutation done,
-  // then we create a report. the problem i am currently wrestling with is how to store the
-  // replacement text, and how to "compare to previous". maybe we maintain an array of visited
-  // lines of text that will be merged at the end to compose the text. then we can also capture the
-  // parsed info per line in that array, and whether that line was "dirtied".
+  // Copy the lines into descs as line descriptors so that we can freely mutate the descs without 
+  // mutating the comment objects.
 
-  // * We can only look backward in an online algorithm. Lookahead is cheating. This means logic can
-  //   only check the current line and the previous line. It cannot look at the next line.
-  // * If we merge the current line into the previous line, the previous line might need to be
-  //   reparsed if we plan to visit it again. On the other hand, if there is no plan to visit then I
-  //   guess we do not need to reparse.
-  // * We parse when we visit a line, if logic is looking at the previous line, and that previous
-  //   line was not modified, then we want to avoid reparsing. On the other hand, if that previous
-  //   line was modified, then we want to reparse that previous line to gather the properties of it
-  //   to make decisions about it. We either reparse immediately after dirtying, or lazily upon
-  //   checking whether the current line should be merged into the previous line.
-  // * We can tell if dirtied if replacement line count is different than group total line count.
-  // * The replacement text lines may not correspond to the input lines. So mapping between the two
-  //   is not beneficial. We should probably clone the lines and then mutate the cloned lines as
-  //   needed. We do not care about original input properties. But if we clone then do we lose
-  //   access to the helper functions provided for by the originals? Do we even need those?
+  const descs: LineDesc[] = [];
+  for (let line = buffer[0].loc.start.line; line <= buffer[buffer.length - 1].loc.end.line;
+    line++) {
+    const desc = <LineDesc>{};
+    desc.scan_state = scanState;
+    desc.type = buffer[0].type === 'Block' ? 'block' : 'line';
+    desc.text = scanState.context.getSourceCode().lines[line - 1];
+    desc.index = line - buffer[0].loc.start.line;
+    desc.parsed = false;
+    descs.push(desc);
+  }
 
-  // First attempt: iterate over the lines. For a line, check if it should be split. if not, append
-  // it to visited, then move to the next line. If it should, split it and append two lines to
-  // visited.
+  // Transform the descs array by splitting and merging descs.
 
-  // I think the best thing to do is to give up on using eslint helpers. Create our own data 
-  // structure and text storage that is independent of eslint. In fact we could have an entire 
-  // library for doing this that is independent of eslint, that this plugin then hooks up to eslint.
-  // Using our own data structures enables us to parse and reparse visited lines trivially even 
-  // though knowledge about the original eslint info has been somewhat lost.
+  for (let i = 0; i < descs.length; i++) {
+    parseLineDesc(descs[i], descs.length);
+    if (shouldSplit(descs[i], descs.length)) {
+      const newDescs = splitDesc(descs[i], descs.length);
+      // Replace the current descriptor with the two new descriptors.
+      descs.splice(descs[i].index, 1, ...newDescs);
 
-  // TODO: we want to first copy over the inputs into the outputs, because we plan to make multiple 
-  // passes and conditionally adjust things in the output, and then test whether the output still 
-  // corresponds to the input. for example, because we want to split a line, we insert two lines 
-  // into the output in place of the original line, and then we want to move the cursor to before 
-  // the second of those two lines and continue scanning.
+      // shift the remaining indexes by 1.
+      for (let j = descs[i].index + 2; j < descs.length; j++) {
+        descs[j].index++;
+      }
 
-  // TODO: but we should not create this wrapper around LineDesc. We can reuse LineDesc. We should 
-  // be shoving extra properties into it. It should not only represent a parsed line. It should 
-  // represent a line that may have been parsed or may not have been parsed. Then we are not parsing
-  // the text so much as we are populating the other fields of a LineDesc based on its text value.
-  // Then we can work off this array of LineDescs in either parsed or non-parsed states. And we can 
-  // mutate them and do things like adjust their indices.
+      // since we mutated via insertion, we want to immediately begin processing the new line and 
+      // not also check for merging. we want to check if we should split the new line again, and 
+      // then check for merging.
+      continue;
+    }
 
-  type ScratchItem = {
-    text: string;
-    /** optional, contains parsed text info, if parsed */
-    desc?: LineDesc;
-  };
+    // TODO: check for merge of current line into previous, if not first line.
 
-  const scratch: ScratchItem[] = [];
+    if (shouldMerge(descs[i], descs)) {
 
-  
-
-
-  // const replacement = [];
-
-  const firstComment = buffer[0];
-  const lastComment = buffer[buffer.length - 1];
-  const bufferLineCount = lastComment.loc.end.line - firstComment.loc.start.line + 1;
-  const bufferType: BufferType = firstComment.type === 'Block' ? 'block' : 'line';
-
-
-
-  for (let line = firstComment.loc.start.line; line <= lastComment.loc.end.line; line++) {
-    const lineText = scanState.context.getSourceCode().lines[line - 1];
-    const lineBufferIndex = line - firstComment.loc.start.line;
-    const lineDesc = parseLine(bufferType, lineText, lineBufferIndex, bufferLineCount);
-
-    // TODO: inline split logic here, for now, then eventually move into a helper once things make 
-    // more sense
-
-    if (shouldSplit(lineDesc, lineBufferIndex, bufferLineCount, bufferType, scanState)) {
-      console.log('should split line', lineText);
-      // TODO: split the line into two, and append each line to the output. but, we might have to 
-      // split the same line multiple times? so we really should be iterating over mutable input?
-    } else {
-      console.log('should NOT split line', lineText);
-      // TODO: append the parsed line to the output as is
     }
   }
 
-  // TODO: if the replacement lines do not correspond to the input lines, then we should indicate a 
-  // correction. We want to replace the entire comment. We use the boundaries of the original 
-  // comment and then specify replacement text.
+  for (const desc of descs) {
+    console.log('post transform:', desc.index, desc.text);
+  }
+
+  // TODO: if the count of desc lines does not correspond to the count input buffer lines, then we
+  // know some mutation occurred and so we should indicate a correction. Create a report with a fix
+  // where we replace the entire comment. We use the boundaries of the original comment and then
+  // specify replacement text by building it from the line descs.
 }
 
-function shouldSplit(desc: LineDesc, index: number, lineCount: number, type: BufferType, 
-  scanState: ScanState) {
+function shouldMerge(current: LineDesc, descs: LineDesc[]) {
+  // If the line index is 0, then there is no previous line to merge into, so do not merge.
+  if (current.index === 0) {
+    return false;
+  }
+
+  // We may be dealing with an inserted line from a split that was not yet reparsed.
+  if (!current.parsed) {
+    parseLineDesc(current, descs.length);
+  }
+
+  // We could be looking at a comment line that is empty. Preserve empty lines.
+  if (!current.content) {
+    return false;
+  }
+
+  const previous = descs[current.index - 1];
+
+  // The previous line may not have been parsed yet.
+  if (!previous.parsed) {
+    parseLineDesc(previous, descs.length);
+  }
+
+  // The previous line may not have any content. Preserve empty lines.
+  if (!previous.content) {
+    return false;
+  }
+
+  // We should not merge with the previous line when either line contains a directive.
+  if (previous.directive || current.directive) {
+    return false;
+  }
+
+  // We should not merge with the previous line if the current line contains a fixme.
+  if (current.fixme) {
+    return false;
+  }
+
+  // Only merge if the two lines have similar leading whitespace, if applicable.
+  if (!isLeadWhitespaceAligned(previous, current)) {
+    return false;
+  }
+
+  // Do not merge if the lines have different prefixes, unless the previous line contains markup.
+  if (previous.lead_whitespace.length === current.lead_whitespace.length &&
+    previous.prefix.length !== current.prefix.length) {
+    if (previous.markup) {
+      // allow merge even though indentation because previous line is markup.
+      // for example, this might the second line of a bullet point with extra
+      // leading whitespace but if the first line of the bullet point is short
+      // we still want to merge.
+    } else {
+      // the two lines have different content indentation, assume this is not
+      // author laziness and do not merge.
+      return false;
+    }
+  }
+
+  // If the previous line is at or over the limit, then do not merge. There is no space available to
+  // shift content from the current line into the previous.
+
+  if (previous.lead_whitespace.length + previous.open.length + previous.prefix.length + 
+    previous.content.length + previous.suffix.length + previous.close.length >= 
+    previous.scan_state.max_line_length) {
+    return false;
+  }
+
+  if (containsMarkdownList(current)) {
+    return false;
+  }
+
+  if (containsJSDocTag(current)) {
+    return;
+  }
+
+  // TODO: tokenize. But we have a problem now. We do not want to retokenize when performing the 
+  // merge. I guess we cache the tokens in the line desc?
+
+/*
+
+  const tokens = tokenize(current.content);
+
+  const isHyphenMerge = (tokens[0] === '-' && !previous.content.endsWith('-')) ||
+    (tokens[0] !== '-' && previous.content.endsWith('-'));
+
+  let spaceRemaining = previous.context.max_line_length - previousLineEndPosition;
+
+  if (!isHyphenMerge) {
+    spaceRemaining--;
+  }
+
+  const fittingTokens = [];
+  for (const token of tokens) {
+    if (token.length <= spaceRemaining) {
+      fittingTokens.push(token);
+      spaceRemaining -= token.length;
+    } else {
+      break;
+    }
+  }
+
+  if (fittingTokens.length === 0) {
+    return;
+  }
+*/
+
+  return true;
+}
+
+function containsMarkdownList(line: LineDesc) {
+  return line.type === 'block' && (line.markup?.startsWith('*') || line.markup?.startsWith('-') ||
+    /^\d/.test(line.markup));
+}
+
+export function containsJSDocTag(line: LineDesc) {
+  return line.type === 'block' && line.markup.startsWith('@');
+}
+
+
+function isLeadWhitespaceAligned(line1: LineDesc, line2: LineDesc) {
+  // If the line's prefix starts with an asterisk then assume it is javadoc. For the first line of a
+  // javadoc comment, the lines are only aligned if the asterisks are vertically aligned. The first
+  // asterisk of the second line should be underneath the second asterisk of the first line. This
+  // means there should be one extra space in the second line. for other lines of a javadoc comment,
+  // fall through to requiring exact equality. In the non-javadoc case, everything is always aligned
+  // because lead whitespace is a part of the content and not treated as lead whitespace.
+
+  if (line1.type === 'block') {
+    if (line2.prefix.startsWith('*')) {
+      if (line2.index === 0) {
+        return line2.lead_whitespace.length - line1.lead_whitespace.length === 1;
+      } else {
+        // FALL THROUGH
+      }
+    } else {
+      return true;
+    }
+  }
+
+  return line2.lead_whitespace.length === line2.lead_whitespace.length;
+}
+
+function splitDesc(desc: LineDesc, lineCount: number) {
+  const tokens = tokenize(desc.content);
+  const tokenSplitIndex = findTokenSplit(desc, tokens, lineCount);
+
+  let breakpoint = -1;
+  if (desc.type === 'block' && desc.index + 1 === lineCount && 
+    desc.lead_whitespace.length + desc.open.length + desc.prefix.length + desc.content.length <= 
+    desc.scan_state.max_line_length) {
+    breakpoint = -1;
+  } else if (tokenSplitIndex === -1) {
+    breakpoint = desc.scan_state.max_line_length - (desc.lead_whitespace.length + 
+      desc.open.length + desc.prefix.length);
+  } else if (tokens[tokenSplitIndex].trim().length === 0) {
+    breakpoint = tokens.slice(0, tokenSplitIndex + 1).join('').length;
+  } else {
+    breakpoint = tokens.slice(0, tokenSplitIndex).join('').length;
+  }
+
+  const desc1 = <LineDesc>{};
+  desc1.index = desc.index;
+  desc1.scan_state = desc.scan_state;
+  desc1.text = desc.lead_whitespace + desc.open + desc.prefix + desc.content.slice(0, breakpoint);
+  desc1.type = desc.type;
+  desc1.parsed = false;
+
+  const desc2 = <LineDesc>{};
+  desc2.index = desc.index + 1;
+  desc2.scan_state = desc.scan_state;
+  const open = desc.type === 'block' && desc.index === 0 ? '' : desc.open;
+  desc2.text = desc.lead_whitespace + open + desc.prefix + desc.content.slice(breakpoint);
+  desc2.type = desc.type;
+  desc2.parsed = false;
+
+  return [desc1, desc2];
+}
+
+function findTokenSplit(desc: LineDesc, tokens: string[], lineCount: number) {
+  const endOfPrefix = desc.lead_whitespace.length + desc.open.length + desc.prefix.length;
+  let remaining = endOfPrefix  + desc.content.length;
+
+  let tokenSplitIndex = -1;
+
+  // Edge case for trailing whitespace in last line of block comment.
+
+  if (desc.type === 'block' && desc.index + 1 === lineCount && remaining <= 
+    desc.scan_state.max_line_length) {
+    return - 1;
+  }
+
+  for (let i = tokens.length - 1; i > -1; i--) {
+    const token = tokens[i];
+
+    // If moving this content token to the next line would leave only the prefix remaining for the
+    // current line, it means that we parsed a token that starts immediately after the prefix, which
+    // only happens when there is one large token starting the content that itself causes the line
+    // to overflow. In this case we do not want to decrement remaining and we do not want to set the
+    // index as found. This may not have been the only token on the line, it is just the last
+    // visited one that no longer fits, so the index could either be -1 or some later index for some
+    // subsequent token that only starts after the threshold. We break here because we know there is
+    // no longer a point in looking at earlier tokens.
+
+    if (remaining - token.length === endOfPrefix) {
+      // Reset the index. If we ran into a big token at the start, it means we are going to have to
+      // hard break the token itself.
+      tokenSplitIndex = -1;
+      break;
+    }
+
+    // Handle those tokens that are positioned entirely after the threshold. Removing the tokens
+    // leading up to this token along with this token are not enough to find a split. We need to
+    // continue searching backward. Shift the index, since this is a token that will be moved.
+    // Update remaining, since this is a token that will be moved.
+
+    if (remaining - token.length > desc.scan_state.max_line_length) {
+      tokenSplitIndex = i;
+      remaining -= token.length;
+      continue;
+    }
+
+    // Handle a token spanning the threshold. Since we are iterating backwards, we want to stop
+    // searching the first time this condition is met. This is the final token to move.
+
+    if (remaining - token.length <= desc.scan_state.max_line_length) {
+      tokenSplitIndex = i;
+      remaining -= token.length;
+      break;
+    }
+  }
+
+  // Account for soft break preceding hyphenated word.
+
+  if (tokenSplitIndex > 0 && tokens[tokenSplitIndex] === '-' &&
+    remaining - tokens[tokenSplitIndex - 1].length > endOfPrefix) {
+    tokenSplitIndex--;
+  }
+
+  return tokenSplitIndex;
+}
+
+function shouldSplit(desc: LineDesc, lineCount: number) {
   // If the line contains a directive then do not split.
   if (desc.directive) {
     return false;
@@ -184,20 +390,20 @@ function shouldSplit(desc: LineDesc, index: number, lineCount: number, type: Buf
   // Basic desc structure:
   // lead space | open | prefix | content | suffix | close | unspecified
 
-  if (desc.text.length <= scanState.max_line_length) {
+  if (desc.text.length <= desc.scan_state.max_line_length) {
     return false;
   }
 
-  if (desc.lead_whitespace.length >= scanState.max_line_length) {
+  if (desc.lead_whitespace.length >= desc.scan_state.max_line_length) {
     return false;
   }
 
-  if (desc.lead_whitespace.length + desc.open.length >= scanState.max_line_length) {
+  if (desc.lead_whitespace.length + desc.open.length >= desc.scan_state.max_line_length) {
     return false;
   }
 
   if (desc.lead_whitespace.length + desc.open.length + desc.prefix.length >= 
-    scanState.max_line_length) {
+    desc.scan_state.max_line_length) {
     return false;
   }
 
@@ -208,8 +414,8 @@ function shouldSplit(desc: LineDesc, index: number, lineCount: number, type: Buf
   // content less the trailing whitespace, is under the limit. We only want to split a line when the 
   // visual content is over the limit. We can ignore the suffix whitespace. That is not our concern.
 
-  if (index + 1 < lineCount && desc.lead_whitespace.length + desc.open.length + desc.prefix.length + 
-    desc.content.length <= scanState.max_line_length)  {
+  if (desc.index + 1 < lineCount && desc.lead_whitespace.length + desc.open.length + 
+    desc.prefix.length + desc.content.length <= desc.scan_state.max_line_length)  {
     return false;
   }
 
@@ -217,15 +423,15 @@ function shouldSplit(desc: LineDesc, index: number, lineCount: number, type: Buf
   // leading up to the closing syntax do matter, and we only want to split if the length up to and
   // including the closing syntax is over the limit.
 
-  if (index + 1 === lineCount && desc.lead_whitespace.length + desc.open.length + 
+  if (desc.index + 1 === lineCount && desc.lead_whitespace.length + desc.open.length + 
     desc.prefix.length +  desc.content.length + desc.suffix.length + desc.close.length <= 
-    scanState.max_line_length) {
+    desc.scan_state.max_line_length) {
     return false;
   }
 
   // Ignore @see JSDoc lines as these tend to contain long urls
 
-  if (type === 'block'  && desc.prefix?.startsWith('*') && desc.markup?.startsWith('@see')) {
+  if (desc.type === 'block' && desc.prefix?.startsWith('*') && desc.markup?.startsWith('@see')) {
     return false;
   }
 
@@ -233,7 +439,6 @@ function shouldSplit(desc: LineDesc, index: number, lineCount: number, type: Buf
 
   return true;
 }
-
 
 function findLineBreakChars(context: eslint.Rule.RuleContext) {
   // eslint's AST apparently does not contain line break tokens (?) so we scan the text.
@@ -244,6 +449,23 @@ function findLineBreakChars(context: eslint.Rule.RuleContext) {
 }
 
 interface LineDesc {
+  parsed: boolean;
+
+  /**
+   * The position of the descriptor within the array of descriptors. Much of the time this is 
+   * basically the index of the line in the array of lines of the set of comments comprising a 
+   * single group.
+   */
+  index: number;
+
+  scan_state: ScanState;
+
+  /**
+   * The type of the group of comments where this desc is one of the lines of one of the comments in 
+   * the group.
+   */
+  type: 'block' | 'line';
+
   /**
    * Whitespace characters leading up to the open region. For a block comment, it is assumed that
    * block comments that follow another kind of token on the same line are never analyzed, so this
@@ -325,37 +547,53 @@ interface LineDesc {
   suffix: string;
 }
 
-function parseLine(type: BufferType, text: string, index: number, lineCount: number) {
-  const desc = <LineDesc>{};
-  desc.text = text;
+/**
+ * Populates some of the desc fields based on the desc contents.
+ */
+function parseLineDesc(desc: LineDesc, lineCount: number) {
+  // For idempotency, we reset. This avoids leaving around some properties as set from a previous 
+  // parse. A little wasteful but it is convenient.
 
-  if (type === 'line') {
-    const parts = /^(\s*)(\/\/)(\s*)(.*)/.exec(text);
+  desc.lead_whitespace = '';
+  desc.open = '';
+  desc.prefix = '';
+  desc.content = '';
+  desc.suffix = '';
+  desc.close = '';
+  desc.markup = '';
+  desc.markup_space = '';
+  desc.directive = '';
+  desc.fixme = '';
+
+  desc.parsed = true;
+
+  if (desc.type === 'line') {
+    const parts = /^(\s*)(\/\/)(\s*)(.*)/.exec(desc.text);
     desc.lead_whitespace = parts[1];
     desc.open = parts[2];
     desc.prefix = parts[3];
     desc.content = parts[4].trimEnd();
     desc.suffix = parts[4].slice(desc.content.length);
     desc.close = '';
-  } else if (type === 'block') {
+  } else if (desc.type === 'block') {
     if (lineCount === 1) {
-      const parts = /^(\s*)(\/\*)(\*?\s*)(.*)(\*\/)/.exec(text);
+      const parts = /^(\s*)(\/\*)(\*?\s*)(.*)(\*\/)/.exec(desc.text);
       desc.lead_whitespace = parts[1];
       desc.open = parts[2];
       desc.prefix = parts[3];
       desc.content = parts[4].trimEnd();
       desc.suffix = parts[4].slice(desc.content.length);
       desc.close = parts[5];
-    } else if (index === 0) {
-      const parts = /^(\s*)(\/\*)(\*?\s*)(.*)/.exec(text);
+    } else if (desc.index === 0) {
+      const parts = /^(\s*)(\/\*)(\*?\s*)(.*)/.exec(desc.text);
       desc.lead_whitespace = parts[1];
       desc.open = parts[2];
       desc.prefix = parts[3];
       desc.content = parts[4].trimEnd();
       desc.suffix = parts[4].slice(desc.content.length);
       desc.close = '';
-    } else if (index === lineCount - 1) {
-      const parts = /^(\s*)(\*?\s*)(.*)(\*\/)/.exec(text);
+    } else if (desc.index === lineCount - 1) {
+      const parts = /^(\s*)(\*?\s*)(.*)(\*\/)/.exec(desc.text);
       desc.lead_whitespace = parts[1];
       desc.open = '';
       desc.prefix = parts[2];
@@ -363,7 +601,7 @@ function parseLine(type: BufferType, text: string, index: number, lineCount: num
       desc.suffix = parts[3].slice(desc.content.length);
       desc.close = parts[4];
     } else {
-      const parts = /^(\s*)(\*?\s*)(.*)/.exec(text);
+      const parts = /^(\s*)(\*?\s*)(.*)/.exec(desc.text);
       desc.lead_whitespace = parts[1];
       desc.open = '';
       desc.prefix = parts[2];
@@ -373,13 +611,13 @@ function parseLine(type: BufferType, text: string, index: number, lineCount: num
     }
   }
 
-  if (type === 'block') {
+  if (desc.type === 'block') {
     const [markup, markupSpace] = parseMarkup(desc);
     desc.markup = markup;
     desc.markup_space = markupSpace;
   }
 
-  desc.directive = parseDirective(type, desc, index);
+  desc.directive = parseDirective(desc);
 
   const fixmes = /^(fix|fixme|todo|note|bug|warn|warning|hack|todo\([^)]*\))(:)/is.exec(
     desc.content
@@ -418,15 +656,26 @@ function parseMarkup(desc: LineDesc) {
   return ['', ''];
 }
 
-function parseDirective(type: string, desc: LineDesc, index: number) {
-  if (index === 0) {
+function parseDirective(desc: LineDesc) {
+  if (desc.index === 0) {
     const matches = /^(globals?\s|jslint\s|tslint:\s|property\s|eslint\s|jshint\s|istanbul\s|jscs\s|eslint-env|eslint-disable|eslint-enable|eslint-disable-next-line|eslint-disable-line|exported|@ts-check|@ts-nocheck|@ts-ignore|@ts-expect-error)/.exec(desc.content);
     if (matches) {
       return matches[1].trimEnd();
     }
   }
 
-  if (type === 'line' && /^\/\s*<(reference|amd)/.test(desc.content)) {
+  if (desc.type === 'line' && /^\/\s*<(reference|amd)/.test(desc.content)) {
     return desc.content.slice(1).trimLeft();
   }
+}
+
+function tokenize(value: string) {
+  const matches = value.matchAll(/[^\s-]+|(?:\s+|-)/g);
+  const tokens: string[] = [];
+
+  for (const match of matches) {
+    tokens.push(match[0]);
+  }
+
+  return tokens;
 }

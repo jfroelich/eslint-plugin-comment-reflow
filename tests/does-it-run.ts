@@ -8,6 +8,9 @@ tester.run('does-it-run', commentLengthRule, {
     {
       code: `
 // 012345678901234567
+// 01234567890
+// 01234567890
+// 01234567890
 var x = 1;
 `,
       options: [20],
