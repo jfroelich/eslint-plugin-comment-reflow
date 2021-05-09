@@ -7,17 +7,8 @@ tester.run('does-it-run', commentLengthRule, {
   valid: [
     {
       code: `
-// a
-// b
-/* c */
-// d
-// e
-// f
-
-     // indented g
-/* h 
-*/
-whatever
+// 012345678901234567
+var x = 1;
 `,
       options: [20],
     }
